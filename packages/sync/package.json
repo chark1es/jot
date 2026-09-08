@@ -1,0 +1,30 @@
+{
+  "name": "@jolt/sync",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "@jolt/source": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build:types": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@jolt/core": "workspace:*",
+    "@jolt/crypto": "workspace:*",
+    "@jolt/local-store": "workspace:*",
+    "@jolt/schema": "workspace:*",
+    "@jolt/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "@jolt/tsconfig": "workspace:*"
+  }
+}

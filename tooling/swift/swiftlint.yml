@@ -1,0 +1,11 @@
+opt_in_rules:
+  - redundant_nil_coalescing
+  - unused_import
+disabled_rules:
+  - trailing_comma
+line_length:
+  warning: 120
+  error: 160
+excluded:
+  - "**/generated/**"
+  - "**/Pods/**"

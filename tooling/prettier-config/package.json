@@ -1,0 +1,9 @@
+{
+  "name": "@jolt/prettier-config",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  }
+}

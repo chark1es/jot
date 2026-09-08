@@ -1,0 +1,99 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "bulletList",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": [
+        {
+          "type": "listItem",
+          "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "amaaaaaaaaaaaaaaaaaaaaaaaa",
+              "content": [{ "type": "text", "id": "aqaaaaaaaaaaaaaaaaaaaaaaaa", "text": "one", "marks": [] }]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "id": "auaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "ayaaaaaaaaaaaaaaaaaaaaaaaa",
+              "content": [{ "type": "text", "id": "a4aaaaaaaaaaaaaaaaaaaaaaaa", "text": "two", "marks": [] }]
+            },
+            {
+              "type": "bulletList",
+              "id": "baaaaaaaaaaaaaaaaaaaaaaaaa",
+              "content": [
+                {
+                  "type": "listItem",
+                  "id": "beaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "id": "biaaaaaaaaaaaaaaaaaaaaaaaa",
+                      "content": [{ "type": "text", "id": "bmaaaaaaaaaaaaaaaaaaaaaaaa", "text": "nested", "marks": [] }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "id": "bqaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "start": 2 },
+      "content": [
+        {
+          "type": "listItem",
+          "id": "buaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "byaaaaaaaaaaaaaaaaaaaaaaaa",
+              "content": [{ "type": "text", "id": "b4aaaaaaaaaaaaaaaaaaaaaaaa", "text": "second", "marks": [] }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "taskList",
+      "id": "caaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": [
+        {
+          "type": "taskItem",
+          "id": "ceaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": { "checked": 0 },
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "ciaaaaaaaaaaaaaaaaaaaaaaaa",
+              "content": [{ "type": "text", "id": "cmaaaaaaaaaaaaaaaaaaaaaaaa", "text": "todo", "marks": [] }]
+            }
+          ]
+        },
+        {
+          "type": "taskItem",
+          "id": "cqaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": { "checked": 1 },
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "cuaaaaaaaaaaaaaaaaaaaaaaaa",
+              "content": [{ "type": "text", "id": "cyaaaaaaaaaaaaaaaaaaaaaaaa", "text": "done", "marks": [] }]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

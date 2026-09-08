@@ -1,0 +1,28 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "paragraph",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": [
+        {
+          "type": "text",
+          "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa",
+          "text": "read more",
+          "marks": [
+            { "type": "underline" },
+            {
+              "type": "link",
+              "attrs": { "href": "https://example.com/path", "title": "" }
+            },
+            { "type": "textColor", "attrs": { "paletteId": "signalAmber" } },
+            { "type": "highlight", "attrs": { "paletteId": "highlightWarm" } },
+            { "type": "italic" },
+            { "type": "bold" }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "table",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": [
+        {
+          "type": "tableRow",
+          "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            {
+              "type": "tableCell",
+              "id": "amaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": { "header": 1, "colspan": 1, "rowspan": 1 },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "id": "aqaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "content": [{ "type": "text", "id": "auaaaaaaaaaaaaaaaaaaaaaaaa", "text": "H1", "marks": [] }]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "id": "ayaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": { "header": 1, "colspan": 1, "rowspan": 1 },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "id": "a4aaaaaaaaaaaaaaaaaaaaaaaa",
+                  "content": [{ "type": "text", "id": "baaaaaaaaaaaaaaaaaaaaaaaaa", "text": "H2", "marks": [] }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tableRow",
+          "id": "beaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            {
+              "type": "tableCell",
+              "id": "biaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": { "header": 0, "colspan": 1, "rowspan": 1 },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "id": "bmaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "content": [{ "type": "text", "id": "bqaaaaaaaaaaaaaaaaaaaaaaaa", "text": "A", "marks": [] }]
+                }
+              ]
+            },
+            {
+              "type": "tableCell",
+              "id": "buaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": { "header": 0, "colspan": 2, "rowspan": 1 },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "id": "byaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "content": [{ "type": "text", "id": "b4aaaaaaaaaaaaaaaaaaaaaaaa", "text": "B", "marks": [] }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

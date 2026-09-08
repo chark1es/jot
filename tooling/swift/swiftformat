@@ -1,0 +1,7 @@
+--swiftversion 6.0
+--indent 2
+--maxwidth 100
+--trimwhitespace always
+--insertlines disabled
+--wraparguments before-first
+--wrapcollections before-first

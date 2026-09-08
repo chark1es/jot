@@ -1,0 +1,26 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/schema" },
+    { "path": "./packages/tokens" },
+    { "path": "./packages/storage" },
+    { "path": "./packages/crypto" },
+    { "path": "./packages/local-store" },
+    { "path": "./packages/change-wakeup" },
+    { "path": "./packages/core" },
+    { "path": "./packages/sync" },
+    { "path": "./packages/test-kit" },
+    { "path": "./packages/editor-native" },
+    { "path": "./packages/editor-web" },
+    { "path": "./packages/change-wakeup-relay" },
+    { "path": "./packages/crypto-native" },
+    { "path": "./packages/crypto-tauri" },
+    { "path": "./packages/local-store-expo" },
+    { "path": "./packages/local-store-tauri" },
+    { "path": "./packages/storage-google-drive" },
+    { "path": "./packages/ui-mobile" },
+    { "path": "./packages/ui-desktop" },
+    { "path": "./packages/import-export" },
+    { "path": "./services/relay" }
+  ]
+}

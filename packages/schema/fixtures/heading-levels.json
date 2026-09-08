@@ -1,0 +1,42 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "heading",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 1 },
+      "content": [{ "type": "text", "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa", "text": "one", "marks": [] }]
+    },
+    {
+      "type": "heading",
+      "id": "amaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "id": "aqaaaaaaaaaaaaaaaaaaaaaaaa", "text": "two", "marks": [] }]
+    },
+    {
+      "type": "heading",
+      "id": "auaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 3 },
+      "content": [{ "type": "text", "id": "ayaaaaaaaaaaaaaaaaaaaaaaaa", "text": "three", "marks": [] }]
+    },
+    {
+      "type": "heading",
+      "id": "a4aaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 4 },
+      "content": [{ "type": "text", "id": "baaaaaaaaaaaaaaaaaaaaaaaaa", "text": "four", "marks": [] }]
+    },
+    {
+      "type": "heading",
+      "id": "beaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 5 },
+      "content": [{ "type": "text", "id": "biaaaaaaaaaaaaaaaaaaaaaaaa", "text": "five", "marks": [] }]
+    },
+    {
+      "type": "heading",
+      "id": "bmaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 6 },
+      "content": [{ "type": "text", "id": "bqaaaaaaaaaaaaaaaaaaaaaaaa", "text": "six", "marks": [] }]
+    }
+  ]
+}

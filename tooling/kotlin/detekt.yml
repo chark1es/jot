@@ -1,0 +1,10 @@
+build:
+  maxIssues: 0
+complexity:
+  LongMethod:
+    threshold: 80
+naming:
+  active: true
+style:
+  MagicNumber:
+    active: false

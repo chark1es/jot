@@ -1,0 +1,18 @@
+{
+  "extends": "../../tooling/tsconfig/library.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../local-store"
+    },
+    {
+      "path": "../schema"
+    }
+  ]
+}

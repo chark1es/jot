@@ -1,0 +1,18 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "paragraph",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": [
+        {
+          "type": "text",
+          "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa",
+          "text": "Hello",
+          "marks": [{ "type": "bold" }]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@jolt/editor-lab",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start --dev-client",
+    "ios": "expo start --ios --dev-client",
+    "android": "expo start --android --dev-client",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf .expo dist"
+  },
+  "dependencies": {
+    "@jolt/tokens": "workspace:*",
+    "expo": "57.0.21",
+    "expo-constants": "57.0.17",
+    "expo-dev-client": "57.0.18",
+    "expo-linking": "57.0.9",
+    "expo-router": "57.0.20",
+    "expo-status-bar": "57.0.1",
+    "expo-system-ui": "57.0.3",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "2.32.0",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "4.26.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

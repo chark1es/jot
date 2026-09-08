@@ -1,0 +1,14 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "heading",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "level": 2, "extra": "drop-me", "alsoUnknown": 1 },
+      "content": [
+        { "type": "text", "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa", "text": "Kept", "marks": [] }
+      ]
+    }
+  ]
+}

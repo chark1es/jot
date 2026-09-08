@@ -1,0 +1,27 @@
+{
+  "extends": "../../tooling/tsconfig/library.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../schema"
+    },
+    {
+      "path": "../storage"
+    },
+    {
+      "path": "../crypto"
+    },
+    {
+      "path": "../local-store"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[package]
+name = "jolt-canonical-json"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "UNLICENSED"
+
+[dependencies]
+
+[dev-dependencies]
+serde_json = "1"

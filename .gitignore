@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build
+dist/
+.turbo/
+*.tsbuildinfo
+.expo/
+web-build/
+.vite/
+src-tauri/target/
+target/
+crates/**/target/
+
+# Native / Expo
+apps/mobile/ios/Pods/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/editor-lab/ios/Pods/
+apps/editor-lab/android/.gradle/
+*.jks
+*.keystore
+!debug.keystore
+
+# Tauri / OS
+*.app
+*.dmg
+*.exe
+*.msi
+.DS_Store
+Thumbs.db
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+google-services.json
+GoogleService-Info.plist
+
+# Logs and coverage
+*.log
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Generated local
+.cache/
+tmp/

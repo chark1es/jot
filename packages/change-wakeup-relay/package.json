@@ -1,0 +1,26 @@
+{
+  "name": "@jolt/change-wakeup-relay",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "@jolt/source": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build:types": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@jolt/change-wakeup": "workspace:*"
+  },
+  "devDependencies": {
+    "@jolt/tsconfig": "workspace:*"
+  }
+}

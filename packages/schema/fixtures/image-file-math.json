@@ -1,0 +1,44 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content": [
+    {
+      "type": "image",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": {
+        "attachmentId": "aiaaaaaaaaaaaaaaaaaaaaaaaa",
+        "widthBasisPoints": 5000,
+        "alt": "photo"
+      },
+      "content": [
+        {
+          "type": "caption",
+          "id": "amaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [{ "type": "text", "id": "aqaaaaaaaaaaaaaaaaaaaaaaaa", "text": "A photo", "marks": [] }]
+        }
+      ]
+    },
+    {
+      "type": "fileAttachment",
+      "id": "auaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "attachmentId": "ayaaaaaaaaaaaaaaaaaaaaaaaa" }
+    },
+    {
+      "type": "mathBlock",
+      "id": "a4aaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": { "latex": "e^{i\\pi}+1=0", "alt": "Euler" }
+    },
+    {
+      "type": "paragraph",
+      "id": "baaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content": [
+        { "type": "text", "id": "beaaaaaaaaaaaaaaaaaaaaaaaa", "text": "inline ", "marks": [] },
+        {
+          "type": "mathInline",
+          "id": "biaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": { "latex": "x^2", "alt": "x squared" }
+        }
+      ]
+    }
+  ]
+}

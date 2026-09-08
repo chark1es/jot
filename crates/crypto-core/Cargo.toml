@@ -1,0 +1,20 @@
+[package]
+name = "jolt-crypto-core"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Shared RustCrypto core for Jolt. Phase 0 links the crate; Phase 3 implements envelopes."
+
+[lib]
+name = "jolt_crypto_core"
+path = "src/lib.rs"
+
+[dependencies]
+aead = "0.6.1"
+argon2 = "0.6.0"
+chacha20poly1305 = "0.11.0"
+getrandom = "0.4.3"
+hkdf = "0.13.0"
+hmac = "0.13.0"
+sha2 = "0.11.0"
+zeroize = "1.9.0"

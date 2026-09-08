@@ -1,0 +1,50 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["eslint.config.mjs", "prettier.config.mjs", "tsconfig.json", "package.json"],
+  "tasks": {
+    "generate": {
+      "dependsOn": ["^generate"],
+      "inputs": [
+        "src/**",
+        "generators/**",
+        "tokens.json",
+        "fixtures/**"
+      ],
+      "outputs": ["generated/**"]
+    },
+    "build:types": {
+      "dependsOn": ["^generate", "^build:types", "generate"],
+      "outputs": ["dist/**", "*.tsbuildinfo"]
+    },
+    "build": {
+      "dependsOn": ["^generate", "^build", "generate"],
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^generate", "generate"]
+    },
+    "typecheck": {
+      "dependsOn": ["^generate", "^build:types", "generate", "build:types"]
+    },
+    "test": {
+      "dependsOn": ["^build:types", "build:types"]
+    },
+    "test:conformance": {
+      "dependsOn": ["generate"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build:types", "build:types"]
+    },
+    "test:relay": {
+      "dependsOn": ["^build:types", "build:types"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

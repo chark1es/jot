@@ -1,0 +1,15 @@
+node_modules
+dist
+generated
+.turbo
+.expo
+coverage
+*.tsbuildinfo
+bun.lock
+ios
+android
+src-tauri/target
+target
+*.png
+*.jpg
+*.webp
