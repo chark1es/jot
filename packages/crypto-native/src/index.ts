@@ -1,4 +1,4 @@
-import type { CryptoEngine } from '@jolt/crypto';
+import type { CryptoEngine } from '@jot/crypto';
 
 /**
  * README: Expo adapter to the Rust crypto core and native key stores.

@@ -1,13 +1,15 @@
 {
-  "name": "@jolt/ui-mobile",
+  "name": "@jot/ui-mobile",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
-      "import": "./src/index.ts"
+      "@jot/source": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
   "scripts": {
@@ -18,9 +20,9 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/tokens": "workspace:*"
+    "@jot/tokens": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

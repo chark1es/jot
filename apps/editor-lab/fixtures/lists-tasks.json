@@ -1,0 +1,190 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "attrs": {},
+  "content": [
+    {
+      "type": "bulletList",
+      "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": {},
+      "content": [
+        {
+          "type": "listItem",
+          "id": "aiaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": {},
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "amaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "id": "aqaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "attrs": {},
+                  "content": [],
+                  "marks": [],
+                  "text": "one"
+                }
+              ],
+              "marks": []
+            }
+          ],
+          "marks": []
+        },
+        {
+          "type": "listItem",
+          "id": "auaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": {},
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "ayaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "id": "a4aaaaaaaaaaaaaaaaaaaaaaaa",
+                  "attrs": {},
+                  "content": [],
+                  "marks": [],
+                  "text": "two"
+                }
+              ],
+              "marks": []
+            },
+            {
+              "type": "bulletList",
+              "id": "baaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "listItem",
+                  "id": "beaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "attrs": {},
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "id": "biaaaaaaaaaaaaaaaaaaaaaaaa",
+                      "attrs": {},
+                      "content": [
+                        {
+                          "type": "text",
+                          "id": "bmaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "attrs": {},
+                          "content": [],
+                          "marks": [],
+                          "text": "nested"
+                        }
+                      ],
+                      "marks": []
+                    }
+                  ],
+                  "marks": []
+                }
+              ],
+              "marks": []
+            }
+          ],
+          "marks": []
+        }
+      ],
+      "marks": []
+    },
+    {
+      "type": "orderedList",
+      "id": "bqaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": {
+        "start": 2
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "id": "buaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": {},
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "byaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "id": "b4aaaaaaaaaaaaaaaaaaaaaaaa",
+                  "attrs": {},
+                  "content": [],
+                  "marks": [],
+                  "text": "second"
+                }
+              ],
+              "marks": []
+            }
+          ],
+          "marks": []
+        }
+      ],
+      "marks": []
+    },
+    {
+      "type": "taskList",
+      "id": "caaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attrs": {},
+      "content": [
+        {
+          "type": "taskItem",
+          "id": "ceaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": {
+            "checked": 0
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "ciaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "id": "cmaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "attrs": {},
+                  "content": [],
+                  "marks": [],
+                  "text": "todo"
+                }
+              ],
+              "marks": []
+            }
+          ],
+          "marks": []
+        },
+        {
+          "type": "taskItem",
+          "id": "cqaaaaaaaaaaaaaaaaaaaaaaaa",
+          "attrs": {
+            "checked": 1
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "id": "cuaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "id": "cyaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "attrs": {},
+                  "content": [],
+                  "marks": [],
+                  "text": "done"
+                }
+              ],
+              "marks": []
+            }
+          ],
+          "marks": []
+        }
+      ],
+      "marks": []
+    }
+  ],
+  "marks": []
+}

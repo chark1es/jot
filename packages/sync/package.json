@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/sync",
+  "name": "@jot/sync",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -18,13 +18,13 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/core": "workspace:*",
-    "@jolt/crypto": "workspace:*",
-    "@jolt/local-store": "workspace:*",
-    "@jolt/schema": "workspace:*",
-    "@jolt/storage": "workspace:*"
+    "@jot/core": "workspace:*",
+    "@jot/crypto": "workspace:*",
+    "@jot/local-store": "workspace:*",
+    "@jot/schema": "workspace:*",
+    "@jot/storage": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

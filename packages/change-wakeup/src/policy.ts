@@ -4,7 +4,7 @@
 export const RELAY_FORBIDDEN_FIELDS = Object.freeze([
   'titles',
   'file names',
-  'Drive IDs for Jolt objects',
+  'Drive IDs for Jot objects',
   'Drive cursors',
   'Google account identifiers',
   'OAuth material',

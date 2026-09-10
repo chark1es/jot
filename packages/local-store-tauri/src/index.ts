@@ -1,4 +1,4 @@
-import type { LocalStore } from '@jolt/local-store';
+import type { LocalStore } from '@jot/local-store';
 
 /**
  * README: typed TypeScript client for Tauri SQLite commands.

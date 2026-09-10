@@ -3,7 +3,7 @@ import { NotImplementedStorageProvider } from './not-implemented.js';
 import type { StorageProvider } from './provider.js';
 import type { StorageCapabilities } from './types.js';
 
-describe('@jolt/storage', () => {
+describe('@jot/storage', () => {
   it('StorageProvider types compile against the throwing adapter', () => {
     const provider: StorageProvider = new NotImplementedStorageProvider();
     expect(provider).toBeInstanceOf(NotImplementedStorageProvider);

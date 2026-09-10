@@ -1,4 +1,4 @@
-import type { FolderId } from '@jolt/schema';
+import type { FolderId } from '@jot/schema';
 import { compareLogicalTime, type LogicalTime } from './clock.js';
 
 /**

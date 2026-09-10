@@ -5,7 +5,7 @@ import type {
   SchemaOperation,
   SchemaSelection,
   TransactionId,
-} from '@jolt/schema';
+} from '@jot/schema';
 
 export type DocumentRevision = number & { readonly __brand: 'DocumentRevision' };
 

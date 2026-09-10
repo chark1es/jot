@@ -1,4 +1,4 @@
-use jolt_canonical_json::{canonicalize, CanonicalValue};
+use jot_canonical_json::{canonicalize, CanonicalValue};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;

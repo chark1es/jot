@@ -1,26 +1,31 @@
 {
-  "name": "@jolt/local-store",
+  "name": "@jot/local-store",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./bun": {
+      "types": "./dist/bun-sqlite.d.ts",
+      "@jot/source": "./src/bun-sqlite.ts",
+      "import": "./src/bun-sqlite.ts"
     }
   },
   "scripts": {
     "build:types": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "bun --bun vitest run",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/schema": "workspace:*"
+    "@jot/schema": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

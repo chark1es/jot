@@ -1,0 +1,78 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "attrs": {},
+  "content": [
+    {
+      "type": "heading",
+      "id": "iuq2nurtykyp3ahybqxyxecabu",
+      "attrs": {
+        "level": 1
+      },
+      "content": [
+        {
+          "type": "text",
+          "id": "4bbvxh66y4owqb3triz65ffrce",
+          "attrs": {},
+          "content": [],
+          "marks": [],
+          "text": "Title"
+        }
+      ],
+      "marks": []
+    },
+    {
+      "type": "heading",
+      "id": "wip2nuloeskhzblpx7x5efqjn4",
+      "attrs": {
+        "level": 2
+      },
+      "content": [
+        {
+          "type": "text",
+          "id": "pnufoyzxyl5c3cefdqi3hcrbv4",
+          "attrs": {},
+          "content": [],
+          "marks": [],
+          "text": "Section"
+        }
+      ],
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "id": "omke4q6wkhhaicyjfvcxo7q7yq",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "id": "lckhgc34uhm7ariyorl7bnikcy",
+          "attrs": {},
+          "content": [],
+          "marks": [],
+          "text": "Body copy under the headings."
+        }
+      ],
+      "marks": []
+    },
+    {
+      "type": "codeBlock",
+      "id": "frz2ytf5uuhypohkxo6hynuumq",
+      "attrs": {
+        "languageId": "ts"
+      },
+      "content": [
+        {
+          "type": "text",
+          "id": "3oeepv6ppbn255g3zlulwn4gvq",
+          "attrs": {},
+          "content": [],
+          "marks": [],
+          "text": "const n = 1;"
+        }
+      ],
+      "marks": []
+    }
+  ],
+  "marks": []
+}

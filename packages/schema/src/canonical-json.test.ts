@@ -8,7 +8,7 @@ describe("canonical JSON", () => {
   });
 
   it("does not escape slashes", () => {
-    expect(canonicalizeToString("https://jolt.local/a")).toBe('"https://jolt.local/a"');
+    expect(canonicalizeToString("https://jot.local/a")).toBe('"https://jot.local/a"');
   });
 
   it("uses short escapes for the usual controls and \\u00xx otherwise", () => {

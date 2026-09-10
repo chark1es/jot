@@ -197,7 +197,7 @@ describe("generate drift", () => {
       expect(onDisk, name).toBe(expected);
     }
     expect(Object.keys(files).sort()).toEqual(
-      ["CanonicalJson.kt", "CanonicalJson.swift", "JoltSchema.kt", "JoltSchema.swift", "prosemirror.ts"].sort(),
+      ["CanonicalJson.kt", "CanonicalJson.swift", "JotSchema.kt", "JotSchema.swift", "prosemirror.ts"].sort(),
     );
   });
 });

@@ -1,0 +1,29 @@
+{
+  "type": "doc",
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "attrs": {},
+  "content": [
+    {
+      "type": "paragraph",
+      "id": "telu4rkmc2kqemluhn6alc5qq4",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "id": "nvkkifrdbfroubafkb3khtih7m",
+          "attrs": {},
+          "content": [],
+          "marks": [
+            {
+              "type": "bold",
+              "attrs": {}
+            }
+          ],
+          "text": "Hello"
+        }
+      ],
+      "marks": []
+    }
+  ],
+  "marks": []
+}

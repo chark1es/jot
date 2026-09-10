@@ -1,4 +1,4 @@
-# Jolt technical design and master development plan
+# Jot technical design and master development plan
 
 Status: proposed for approval  
 Date: 2026-09-08  
@@ -6,7 +6,7 @@ Scope: iOS, Android, macOS, and Windows only
 
 ## Executive decision
 
-The proposed system is feasible with a small content-blind relay and no Jolt content backend. Expo development builds are the right mobile shell, Tauri v2 is the right desktop shell, and Metro plus Vite is the correct bundler split. The central architecture is one versioned document schema, one CRDT and sync engine, native editors on mobile, a ProseMirror editor on desktop, SQLite as the local source of truth, Google Drive as an untrusted file transport, and a replaceable relay that carries invalidation signals only.
+The proposed system is feasible with a small content-blind relay and no Jot content backend. Expo development builds are the right mobile shell, Tauri v2 is the right desktop shell, and Metro plus Vite is the correct bundler split. The central architecture is one versioned document schema, one CRDT and sync engine, native editors on mobile, a ProseMirror editor on desktop, SQLite as the local source of truth, Google Drive as an untrusted file transport, and a replaceable relay that carries invalidation signals only.
 
 I recommend Yjs as the CRDT, an append-only remote protocol with no shared mutable manifest, `expo-sqlite` on mobile, SQLite behind Tauri commands on desktop, one Rust cryptography core for every target, and Convex as the first relay adapter if its privacy and retention settings pass the Phase 2 review. Each note has its own Yjs document. Clients load notes on demand instead of holding a vault-sized CRDT in memory.
 
@@ -19,16 +19,16 @@ This is a large v1. One experienced engineer should plan for roughly 17 to 23 mo
 3. **The relay is not a Drive data proxy.** A backend that receives unencrypted Drive payloads or holds a user's Drive token can read that user's notes, even if it never persists them. That contradicts "I never see their data." Clients must keep Drive credentials and transfer all user content directly to Drive. The relay receives empty change notifications and sends invalidation signals.
 4. **Refresh tokens are durable, not immortal.** Users can revoke access, policies can invalidate grants, and time-based access can expire. Android's native SDK may retain and refresh credentials without exposing a raw refresh token to TypeScript. The product must handle reauthorization without treating it as data loss.
 5. **The relay makes Drive push usable, but it does not make mobile background sync immediate.** Drive push channels call the relay's HTTPS webhook. The notification contains no changed file body, so the relay wakes devices and each client calls `changes.list` directly. APNs, FCM, and mobile operating systems can delay or discard background delivery. Foreground and periodic polling remain the correctness fallback.
-6. **"Version history is close to free" is wrong.** CRDT merge metadata helps, but user-visible history needs retained snapshots, labels, pruning rules, and restore semantics. Yjs history examples keep deleted content or separate versions, which increases storage. Jolt must budget and test this as a feature.
-7. **The literal no-loss invariant is physically impossible.** Software cannot recover an edit that the input method has not committed, a write that has not reached stable storage, failed storage hardware, or a device destroyed before sync. This design gives a precise promise: once Jolt acknowledges a committed edit, process kill and crash recovery preserve it. Phase 0.5 must measure the latency cost of that promise.
+6. **"Version history is close to free" is wrong.** CRDT merge metadata helps, but user-visible history needs retained snapshots, labels, pruning rules, and restore semantics. Yjs history examples keep deleted content or separate versions, which increases storage. Jot must budget and test this as a feature.
+7. **The literal no-loss invariant is physically impossible.** Software cannot recover an edit that the input method has not committed, a write that has not reached stable storage, failed storage hardware, or a device destroyed before sync. This design gives a precise promise: once Jot acknowledges a committed edit, process kill and crash recovery preserve it. Phase 0.5 must measure the latency cost of that promise.
 8. **A single command cannot launch all four targets on one computer.** iOS and macOS builds require macOS. Windows packaging requires Windows. One root command can run every platform-independent check and dispatch a CI matrix that builds all four targets. Local development commands can launch every target supported by the host.
 9. **The requested phase order conflicts with mobile-first priority.** Deferring mobile share sheets, widgets, import, export, accessibility, and store submission until after desktop makes desktop block mobile. The plan adds a Phase 3.5 mobile ship gate before Phase 4.
 10. **"Import from Apple Notes" has no clean cross-platform definition.** Apple exposes no supported bulk Notes export interface for third-party apps on all targets. A macOS importer can request Automation permission and read Notes through AppleScript, with known fidelity gaps. The share sheet can import one note at a time. Directly reading Apple's private Notes database is rejected.
 11. **An iOS widget cannot host a normal keyboard text editor.** The widget can show pinned or recent notes and open the app directly into native quick capture. Android can do the same. Quick capture remains one tap, but it is not inline typing inside the iOS widget.
 12. **Sharing is not technically impossible without a backend.** Drive permissions, exported bundles, or peer-to-peer transport could support limited sharing. Reliable identity, key distribution, access revocation, and product-quality collaboration would be a different system. Keeping all sharing out of v1 is still the right call.
-13. **A visible Drive folder is user-owned and inspectable, but the sync representation is not the portable export.** CRDT packs and encrypted objects are protocol files. Jolt will include a plain README in the folder and a separate Markdown export readable without Jolt.
-14. **Adding a relay changes the privacy claim.** Jolt still has no content backend and no account system, but it now operates infrastructure that sees IP addresses, opaque device endpoints, and notification timing. Privacy copy must say that plainly. "No backend" is no longer accurate marketing. A public HTTPS host can also receive arbitrary bytes from a malicious caller before application code rejects them. The testable promise is that official clients never send content, the relay exposes no content-ingestion route, and it has no Drive credential.
-15. **No browser app does not mean no web presence or cloud operations.** Google requires a public home page and privacy policy for a production OAuth application. Jolt also needs a Google Cloud project, relay deployment, consent-screen verification, quota monitoring, push-provider credentials, and incident response. Those are operational systems, not a browser version of Jolt.
+13. **A visible Drive folder is user-owned and inspectable, but the sync representation is not the portable export.** CRDT packs and encrypted objects are protocol files. Jot will include a plain README in the folder and a separate Markdown export readable without Jot.
+14. **Adding a relay changes the privacy claim.** Jot still has no content backend and no account system, but it now operates infrastructure that sees IP addresses, opaque device endpoints, and notification timing. Privacy copy must say that plainly. "No backend" is no longer accurate marketing. A public HTTPS host can also receive arbitrary bytes from a malicious caller before application code rejects them. The testable promise is that official clients never send content, the relay exposes no content-ingestion route, and it has no Drive credential.
+15. **No browser app does not mean no web presence or cloud operations.** Google requires a public home page and privacy policy for a production OAuth application. Jot also needs a Google Cloud project, relay deployment, consent-screen verification, quota monitoring, push-provider credentials, and incident response. Those are operational systems, not a browser version of Jot.
 
 Nothing in the explicit out-of-scope list should move into v1. Handwriting, scanning, and voice would each add new native capture and attachment lifecycles. Smart folders would add a second query language while search and sync are still settling. Collaboration and sharing need identity, permissions, and key-distribution design. The existing v1 is already at the practical limit.
 
@@ -107,17 +107,17 @@ Choose Yjs 13 for the first production prototype, behind a narrow `CrdtDocument`
 | --- | --- | --- | --- | --- | --- |
 | Yjs | Current npm tarball is about 436 KB and the CommonJS distribution is about 304 KB before app bundling. It is pure JavaScript. Final Metro and Vite sizes must be measured. | Best of the three for Hermes because it avoids a WASM bootstrap. React Native still needs release-build tests and secure random initialization. | `Y.XmlFragment` holds structured rich text directly. `y-prosemirror` is mature and schema-aware. | Tombstones and retained history grow. Persistent native-editor bindings are custom work. | Recommend. |
 | Loro | Current npm tarball is about 5.9 MB and includes a roughly 3.1 MB WASM binary before compression. | Weak today. Its documented JavaScript path initializes WASM, which remains an integration and startup risk under Hermes. Native Swift exists, but Kotlin parity would create a split implementation. | Strong text, tree, version-control, and shallow-snapshot ideas. ProseMirror integration is less established than Yjs. | Promising enough to benchmark during Phase 0.5, not mature enough to anchor v1 mobile. | Rejected for v1. |
-| Automerge | Current npm tarball is about 14 MB and includes a roughly 3.4 MB WASM binary, plus base64 builds. Final bundle size varies by entry point. | Newer packages describe React Native loading options, but WASM packaging and memory remain higher-risk than pure JS. | It now has marks and block markers for rich text. ProseMirror bindings and Jolt's exact schema need more proof. | Full history is valuable but expensive. Mobile memory and startup are the concern. | Rejected for v1. |
+| Automerge | Current npm tarball is about 14 MB and includes a roughly 3.4 MB WASM binary, plus base64 builds. Final bundle size varies by entry point. | Newer packages describe React Native loading options, but WASM packaging and memory remain higher-risk than pure JS. | It now has marks and block markers for rich text. ProseMirror bindings and Jot's exact schema need more proof. | Full history is valuable but expensive. Mobile memory and startup are the concern. | Rejected for v1. |
 
 The package figures above were measured from npm packages on 2026-09-08. They are not installed-app size claims. Phase 0.5 must record Hermes heap, cold-open time, update size, and final binary contribution for pinned versions.
 
-Yjs gives Jolt direct structured state, not an opaque JSON or Markdown blob. Each note owns one Yjs document with a `Y.Text` title, a `Y.XmlFragment` document, and small metadata types. Folder and tag entities use separate small CRDT documents. Only open notes and entities touched by the current sync batch enter memory. SQLite stores projections for lists and search.
+Yjs gives Jot direct structured state, not an opaque JSON or Markdown blob. Each note owns one Yjs document with a `Y.Text` title, a `Y.XmlFragment` document, and small metadata types. Folder and tag entities use separate small CRDT documents. Only open notes and entities touched by the current sync batch enter memory. SQLite stores projections for lists and search.
 
 The canonical schema remains authoritative. Yjs is a merge representation, not permission to store arbitrary XML nodes. Every local or remote transaction validates node names, attributes, nesting, limits, and schema version before it can update projections.
 
 #### Concurrent editing
 
-Each installation gets a random device ID for remote ownership and acknowledgement. Each loaded Yjs document keeps Yjs's own randomly generated client ID. Jolt does not derive it from the device ID, persist it for reuse after restoring a document, or set it manually. Local edit transactions carry a stable transaction ID. Duplicate delivery is harmless because the journal and sync ledger reject an already applied transaction ID, and Yjs updates are idempotent.
+Each installation gets a random device ID for remote ownership and acknowledgement. Each loaded Yjs document keeps Yjs's own randomly generated client ID. Jot does not derive it from the device ID, persist it for reuse after restoring a document, or set it manually. Local edit transactions carry a stable transaction ID. Duplicate delivery is harmless because the journal and sync ledger reject an already applied transaction ID, and Yjs updates are idempotent.
 
 Two devices that edit offline create independent Yjs updates. When either device reconnects, it downloads missing immutable packs, applies valid updates to the local document, recomputes the canonical projection, and publishes any missing local packs. No client replaces its local document with a remote snapshot. A merge can change visible order, but it cannot discard either sequence of body edits.
 
@@ -135,7 +135,7 @@ CRDT storage is not bounded. Sequential Yjs structs can merge, deleted content c
 
 Locally, create a checkpoint after either 500 committed transactions or 1 MiB of incremental updates, then keep later updates separate. Remote sync aggregates transactions into immutable packs capped at 256 KiB or two seconds of edits. A compactor can load a note, apply all covered packs with Yjs garbage collection enabled, and publish a new checkpoint plus state vector.
 
-Compaction never renumbers Yjs clocks. An older client that supports the same remote and schema versions can merge changes against a compact checkpoint. Jolt retains covered packs until every active device acknowledges the checkpoint or 180 days pass. A device absent longer than 180 days must rebootstrap before it may publish. Its unsynced local changes are imported as recovered edits or recovered copies instead of being dropped.
+Compaction never renumbers Yjs clocks. An older client that supports the same remote and schema versions can merge changes against a compact checkpoint. Jot retains covered packs until every active device acknowledges the checkpoint or 180 days pass. A device absent longer than 180 days must rebootstrap before it may publish. Its unsynced local changes are imported as recovered edits or recovered copies instead of being dropped.
 
 User-visible versions are separate canonical document snapshots. Keep manual versions until deletion and automatic versions according to a retention policy. A suggested default is hourly for 24 hours, daily for 30 days, and weekly for one year. This policy is an open product decision.
 
@@ -147,10 +147,10 @@ Drive is treated as an eventually consistent object store with a change log. Fil
 
 #### Remote protocol
 
-Jolt does not have a shared mutable manifest. This removes the simultaneous-manifest-write race from the protocol.
+Jot does not have a shared mutable manifest. This removes the simultaneous-manifest-write race from the protocol.
 
 ```text
-Jolt/
+Jot/
   README.txt
   vaults/
     <zero-padded-epoch>-<hash>.jvault
@@ -174,7 +174,7 @@ A head references only objects whose uploads completed and whose returned size a
 
 Drive may preserve prior file revisions, but the sync protocol does not depend on revision retention. It also does not assume an overwrite is atomic. Protocol-level commit occurs when a valid immutable head references valid immutable objects.
 
-The visible folder is intentionally subject to user action. Renaming or moving it does not break identity because Jolt locates its recorded folder ID and `appProperties`. Deleting it never deletes local notes; sync stops with a "Drive folder missing" state and offers to recreate an empty remote namespace or relink a folder the user explicitly selects. Manually edited protocol files fail validation and enter quarantine. Files a user drops into the folder are not implicitly imported because `drive.file` may not grant Jolt access to them.
+The visible folder is intentionally subject to user action. Renaming or moving it does not break identity because Jot locates its recorded folder ID and `appProperties`. Deleting it never deletes local notes; sync stops with a "Drive folder missing" state and offers to recreate an empty remote namespace or relink a folder the user explicitly selects. Manually edited protocol files fail validation and enter quarantine. Files a user drops into the folder are not implicitly imported because `drive.file` may not grant Jot access to them.
 
 #### Change detection
 
@@ -192,7 +192,7 @@ Push is an optimization. Poll immediately on foreground and after local publicat
 
 #### Fresh install
 
-1. Authorize, locate the Jolt root by `appProperties`, and validate the newest supported vault-descriptor graph.
+1. Authorize, locate the Jot root by `appProperties`, and validate the newest supported vault-descriptor graph.
 2. List device directories, then request only the newest few heads and catalogs for each device by ordered name.
 3. Choose the compatible catalog with the greatest CRDT state-vector coverage. If catalogs are incomparable, merge them locally.
 4. Download catalog shards containing folder, tag, note metadata, title, plaintext search projection, and object references. Encrypted vaults encrypt these shards.
@@ -222,9 +222,9 @@ User-visible trash recovery lasts 30 days. Sync tombstones live for 180 days. Th
 
 Google changed Drive quota accounting in 2026. Current published limits for newer projects are 1,000,000 quota units per project per minute, 325,000 per user per project per minute, 400,000,000 units per project per day before the announced billing threshold, and 1 TB of egress per project per day. Example costs include 100 units for list calls, 5 for item reads, 200 for downloads, and 50 for edits. These numbers are date-sensitive and must remain configuration and operations documentation, not constants in sync logic.
 
-Without relay delivery, Jolt should target fewer than 500 change-list calls and 75,000 total quota units per active device per day. Healthy push delivery should cut routine change-list calls to actual change events, foreground checks, and a low-frequency safety poll. Coalesce edits, batch note deltas across the vault into small packs, use partial responses, avoid polling while mobile is suspended, cache file IDs, and never list the full Drive root during routine sync. At 75,000 units, the 400 million daily project threshold supports only about 5,300 equally active users before headroom. A successful product will need quota monitoring and a new budget calculation.
+Without relay delivery, Jot should target fewer than 500 change-list calls and 75,000 total quota units per active device per day. Healthy push delivery should cut routine change-list calls to actual change events, foreground checks, and a low-frequency safety poll. Coalesce edits, batch note deltas across the vault into small packs, use partial responses, avoid polling while mobile is suspended, cache file IDs, and never list the full Drive root during routine sync. At 75,000 units, the 400 million daily project threshold supports only about 5,300 equally active users before headroom. A successful product will need quota monitoring and a new budget calculation.
 
-Installed-app client IDs are public. The relay can rate-limit its own registrations and notifications, but it cannot stop modified clients from calling Drive directly with Jolt's public OAuth client ID. Per-user limits contain a single account, but project-wide exhaustion remains an operational risk. Restrict and verify each OAuth client, alert on quota use in Google Cloud, keep polling conservative, and rehearse a client-rotation response.
+Installed-app client IDs are public. The relay can rate-limit its own registrations and notifications, but it cannot stop modified clients from calling Drive directly with Jot's public OAuth client ID. Per-user limits contain a single account, but project-wide exhaustion remains an operational risk. Restrict and verify each OAuth client, alert on quota use in Google Cloud, keep polling conservative, and rehearse a client-rotation response.
 
 On 403 quota and 429 rate responses, retain every local outbox item, show the next retry time, and use truncated exponential backoff with full jitter. An expired grant changes sync state to `authorizationRequired`; it never changes local note state.
 
@@ -290,7 +290,7 @@ The relay may store only:
 - channel-token hashes, expiry times, dirty epochs, delivery state, and rate-limit counters
 - coarse operational timestamps needed for expiry and abuse handling
 
-It must reject arbitrary byte payloads, titles, file names, Drive IDs for Jolt objects, Drive cursors, Google account identifiers, OAuth material, encryption keys, CRDT state, attachment metadata, and diagnostic logs. Registration routes accept closed, size-limited schemas. The Google webhook rejects declared nonempty bodies and never calls a body-reading method. Convex still terminates the connection before application code runs and permits HTTP requests far larger than this protocol needs, so Jolt cannot claim that the host is physically incapable of receiving malicious bytes. Logs record route, status class, latency, and opaque truncated correlation IDs only. Notification payloads say only that a topic may be dirty.
+It must reject arbitrary byte payloads, titles, file names, Drive IDs for Jot objects, Drive cursors, Google account identifiers, OAuth material, encryption keys, CRDT state, attachment metadata, and diagnostic logs. Registration routes accept closed, size-limited schemas. The Google webhook rejects declared nonempty bodies and never calls a body-reading method. Convex still terminates the connection before application code runs and permits HTTP requests far larger than this protocol needs, so Jot cannot claim that the host is physically incapable of receiving malicious bytes. Logs record route, status class, latency, and opaque truncated correlation IDs only. Notification payloads say only that a topic may be dirty.
 
 This metadata is still privacy-sensitive. Push endpoints can identify an app installation, IP logs and timestamps expose usage patterns, and the hosting provider processes them. Expired Drive channels disappear promptly. Inactive device endpoints expire after a documented interval, proposed at 90 days. The privacy policy names Convex, Expo Push Service, APNs, and FCM and explains this processing.
 
@@ -298,7 +298,7 @@ Convex is a plausible first adapter because it supplies an HTTPS endpoint, trans
 
 Convex encrypts its database at rest, but deployed functions and authorized operators can access plaintext metadata. Function execution also produces platform logs. Configured daily backups retain rows for seven days and weekly backups for fourteen days. The relay does not need backups for correctness, so do not enable application-managed backups. Obtain written terms for Convex's internal backup deletion, ordinary log retention, data region, support access, and deletion timing before launch. A 24-hour table cleanup promise is not a 24-hour physical erasure promise unless those terms support it.
 
-Do not put Google tokens in Convex. Do not proxy Drive uploads or downloads through it, even transiently. That would expose unencrypted vaults to Jolt and would make relay availability, bandwidth, and compromise part of the content path. Encrypted payload proxying is also rejected because encryption is optional and two code paths would invite privacy mistakes.
+Do not put Google tokens in Convex. Do not proxy Drive uploads or downloads through it, even transiently. That would expose unencrypted vaults to Jot and would make relay availability, bandwidth, and compromise part of the content path. Encrypted payload proxying is also rejected because encryption is optional and two code paths would invite privacy mistakes.
 
 The relay can suppress, delay, duplicate, or forge wakeups if compromised. Capability checks limit unauthorized subscription changes, but a wakeup is never trusted as proof of a Drive change. Clients always verify through Drive. Fallback polling handles suppression. Spam wakeups cost battery and quota, so clients coalesce signals and enforce local rate limits.
 
@@ -310,14 +310,14 @@ Sources: [Google Drive push notifications](https://developers.google.com/workspa
 
 Vault encryption protects note contents, titles, tags, folder names, attachment bytes, catalog projections, and CRDT updates stored on Drive. It protects against Google reading those bytes and against someone who obtains only the Drive folder.
 
-It does not hide the Jolt folder, vault format version, approximate device count, object count, file sizes, upload cadence, modification times, or total storage. Note count remains inferable from encrypted catalog and object patterns. Deduplicated attachments reveal equality within the same vault. Google or an attacker controlling Drive can delete data, withhold updates, duplicate old objects, or attempt rollback. Authenticated heads detect modification, and local state detects some rollback. The Drive-plus-relay architecture cannot guarantee remote availability or a globally fresh view.
+It does not hide the Jot folder, vault format version, approximate device count, object count, file sizes, upload cadence, modification times, or total storage. Note count remains inferable from encrypted catalog and object patterns. Deduplicated attachments reveal equality within the same vault. Google or an attacker controlling Drive can delete data, withhold updates, duplicate old objects, or attempt rollback. Authenticated heads detect modification, and local state detects some rollback. The Drive-plus-relay architecture cannot guarantee remote availability or a globally fresh view.
 
 #### Keys and envelopes
 
 - Generate a random 256-bit vault master key, or VMK, on the device.
 - Derive a 256-bit passphrase key-encryption key with Argon2id v1.3, a random 128-bit salt, and serialized parameters.
 - Default to 64 MiB memory, three passes, and four lanes, matching RFC 9106's memory-constrained recommendation. Benchmark at setup. Target 500 to 1,000 ms without memory pressure.
-- If 64 MiB fails on a low-memory Android device, offer a clearly disclosed 32 MiB, four-pass profile. Do not silently weaken an existing vault. The weakest stored wrapper sets the offline attack cost, so Jolt must not add a low-memory wrapper merely for convenience.
+- If 64 MiB fails on a low-memory Android device, offer a clearly disclosed 32 MiB, four-pass profile. Do not silently weaken an existing vault. The weakest stored wrapper sets the offline attack cost, so Jot must not add a low-memory wrapper merely for convenience.
 - Use the derived key only to wrap the VMK. Changing a passphrase creates a new salt and wrapper. It does not re-encrypt notes or attachments.
 - Derive independent encryption, authentication, deduplication, and catalog subkeys from the VMK with HKDF-SHA-256 and fixed context labels.
 
@@ -325,7 +325,7 @@ Use XChaCha20-Poly1305 for small objects. Its 192-bit nonce makes accidental col
 
 Use the RustCrypto AEAD stream interface with XChaCha20-Poly1305 for large attachments and export archives. Export streams use a random stream nonce; deduplicated attachment streams use the derived base nonce described above. Every stream has authenticated 1 MiB chunks, a final marker, expected length, and an outer ciphertext SHA-256. The file-format specification owns the framing and includes negative tests for reordering, truncation, duplication, and missing final chunks.
 
-Build one small `jolt-crypto-core` Rust library from pinned RustCrypto `argon2`, `chacha20poly1305`, `aead`, `hkdf`, `hmac`, `sha2`, `getrandom`, and `zeroize` crates:
+Build one small `jot-crypto-core` Rust library from pinned RustCrypto `argon2`, `chacha20poly1305`, `aead`, `hkdf`, `hmac`, `sha2`, `getrandom`, and `zeroize` crates:
 
 - iOS links a reproducibly built static library or XCFramework and calls it through generated Swift bindings.
 - Android links the same Rust source through JNI or UniFFI and calls it from Kotlin.
@@ -340,15 +340,15 @@ Phase 3 migrates the local database to SQLCipher on all platforms. The database 
 
 Each locked note has a random 256-bit note-lock key. The note payload and its local search projection are encrypted under that key. A per-note passphrase can create an Argon2id-derived wrapper. A VMK wrapper lets another authorized device recover the note-lock key, and a device-local biometric key wraps it for convenient local unlock. Normal UI requires the selected passphrase or biometric factor even when the vault is open. Biometrics are an unlock factor, not a portable key and not a backup. If vault encryption is off, enabling the first synced locked note must create the VMK recovery setup so Google cannot obtain the note-lock key from a plaintext wrapper.
 
-Once the vault is unlocked, Jolt's own process can technically access keys. Per-note lock protects against casual access, exports, search leakage, and at-rest database inspection. It does not defend against a compromised running process. State that in security documentation.
+Once the vault is unlocked, Jot's own process can technically access keys. Per-note lock protects against casual access, exports, search leakage, and at-rest database inspection. It does not defend against a compromised running process. State that in security documentation.
 
 App lock gates database-key release on cold start and after the configured timeout. Background previews, widgets, search results, notifications, and app-switcher snapshots redact locked content. A share extension can append encrypted intake records but cannot display locked vault content unless the user authenticates.
 
 #### Recovery experience
 
-Encryption setup cannot complete until the user confirms a recovery code. Generate 256 bits of random recovery entropy, encode it as a 24-word mnemonic with a checksum, and use an HKDF-derived recovery key to wrap the VMK. The user can print it or save it outside Jolt. Jolt asks for three randomly selected words before enabling encryption.
+Encryption setup cannot complete until the user confirms a recovery code. Generate 256 bits of random recovery entropy, encode it as a 24-word mnemonic with a checksum, and use an HKDF-derived recovery key to wrap the VMK. The user can print it or save it outside Jot. Jot asks for three randomly selected words before enabling encryption.
 
-The setup copy should say: "Jolt has no account and cannot reset this passphrase. If you lose the passphrase, this recovery code, and every unlocked device, your encrypted notes are permanently unreadable." Do not hide this behind legal copy. The recovery screen should show whether at least one verified recovery method exists. Passphrase change and device enrollment require an unlocked VMK and only add or replace wrappers.
+The setup copy should say: "Jot has no account and cannot reset this passphrase. If you lose the passphrase, this recovery code, and every unlocked device, your encrypted notes are permanently unreadable." Do not hide this behind legal copy. The recovery screen should show whether at least one verified recovery method exists. Passphrase change and device enrollment require an unlocked VMK and only add or replace wrappers.
 
 Sources: [RFC 9106 Argon2id parameters](https://www.rfc-editor.org/rfc/rfc9106.html), [RustCrypto Argon2](https://github.com/RustCrypto/password-hashes), [RustCrypto XChaCha20-Poly1305](https://docs.rs/chacha20poly1305/latest/chacha20poly1305/), and [libsodium XChaCha20-Poly1305](https://doc.libsodium.org/secret-key_cryptography/aead).
 
@@ -407,13 +407,13 @@ Operations are schema terms:
 | Replace or autocorrect | One `replaceRange(a, b, committedSlice, deletedSlice)` | Delete and insert inside one Yjs transaction with one transaction ID. Never model autocorrect as unrelated delete and insert transactions. |
 | Mark toggle | `addMark` or `removeMark` over the normalized selection | Apply or remove the corresponding Yjs text formatting attribute. A collapsed selection changes stored marks only and creates no CRDT update until text is inserted. |
 
-During IME composition, iOS marked text and Android composing spans stay entirely native. Jolt records the pre-composition range and text, queues remote operations for that note, and emits no CRDT operation for intermediate candidates. On commit, it emits one replace transaction from the original range to the committed text. On cancellation, it emits nothing. It then applies queued remote operations and restores the selection through Yjs relative positions. If the process dies during composition, the uncommitted candidate may be lost and is outside the committed-edit promise.
+During IME composition, iOS marked text and Android composing spans stay entirely native. Jot records the pre-composition range and text, queues remote operations for that note, and emits no CRDT operation for intermediate candidates. On commit, it emits one replace transaction from the original range to the committed text. On cancellation, it emits nothing. It then applies queued remote operations and restores the selection through Yjs relative positions. If the process dies during composition, the uncommitted candidate may be lost and is outside the committed-edit promise.
 
 Every committed native transaction first enters a small native durable journal with `synchronous=FULL`. The iOS adapter must intercept committed mutations before applying them through the text-storage delegate path. The Android adapter must wrap `InputConnection` commit, delete, composing-finish, and programmatic replacement paths rather than relying on an after-change `TextWatcher`. Only after the append succeeds may the committed mutation be treated as durable and the module emit `committedTransaction`. Intermediate marked or composing text remains the stated exception. If either platform exposes a committed-input path that cannot be journaled before visible acceptance, the zero-window promise fails the Phase 0.5 gate.
 
 The materializer applies the journaled transaction to Yjs, then commits the Yjs update, note projection, undo entry, and outbox item together and marks the intake record applied. On recovery, unapplied intake records replay by transaction ID. Phase 0.5 must prove that this does not cause typing latency on low-end hardware. If per-transaction fsync misses the input-latency budget, the product owner must choose between a bounded durability window and a heavier native write-ahead strategy. The design will not pretend both guarantees are free.
 
-Persistent undo is Jolt-owned, not a promise delegated to `UndoManager` or Android's process-local stack. Each local origin transaction stores its inverse slice and Yjs relative anchors in a bounded device-local undo group. Remote transactions never enter that stack. After restart, undo resolves surviving anchors against the current merged document and writes a new forward CRDT transaction; redo does the same for the original operation. If concurrent deletion removed both anchors, recovery inserts the preserved slice into the nearest surviving parent or a clearly labeled recovered block instead of discarding it.
+Persistent undo is Jot-owned, not a promise delegated to `UndoManager` or Android's process-local stack. Each local origin transaction stores its inverse slice and Yjs relative anchors in a bounded device-local undo group. Remote transactions never enter that stack. After restart, undo resolves surviving anchors against the current merged document and writes a new forward CRDT transaction; redo does the same for the original operation. If concurrent deletion removed both anchors, recovery inserts the preserved slice into the nearest surviving parent or a clearly labeled recovered block instead of discarding it.
 
 #### Preventing editor drift
 
@@ -464,7 +464,7 @@ Source: [Expo SQLite FTS and SQLCipher configuration](https://docs.expo.dev/vers
 
 ### 1.11 Design system and application UI
 
-The design mode is Operate. Familiar platform behavior outranks brand expression. Jolt's character comes from editorial restraint, careful type, and a small amber signal color, not from decorative containers.
+The design mode is Operate. Familiar platform behavior outranks brand expression. Jot's character comes from editorial restraint, careful type, and a small amber signal color, not from decorative containers.
 
 `packages/tokens/src/tokens.json` is the only authored token source. A generator emits typed TypeScript, Tailwind and NativeWind theme variables, CSS custom properties, Swift values, and Kotlin resources. Generated outputs are checked for drift in CI. Raw color, spacing, radius, shadow, duration, or easing values outside the token package fail lint, except OS-provided semantic values explicitly mapped by the generator.
 
@@ -479,7 +479,7 @@ Proposed token direction:
 | Elevation | Flat by default. Hairline separators organize panes. Elevation exists only for menus, sheets, and drag previews, using platform-native material or shadow tokens. |
 | Motion | 120 ms fast, 180 ms standard, and 260 ms deliberate transitions. Mobile gestures use interruptible Reanimated springs. Desktop uses matched timing curves. Reduced motion removes spatial travel. |
 
-Desktop can use shadcn/ui source components for Radix behavior and Tailwind structure, then restyle them to Jolt's tokens. Mobile should use a small hand-built NativeWind primitive set over React Native and platform controls. I reject a wholesale react-native-reusables dependency for v1 because a DOM-inspired component inventory encourages false parity and adds dependencies around controls that should differ between iOS and Android. Shared tokens and semantic component names provide consistency. Native behavior remains native.
+Desktop can use shadcn/ui source components for Radix behavior and Tailwind structure, then restyle them to Jot's tokens. Mobile should use a small hand-built NativeWind primitive set over React Native and platform controls. I reject a wholesale react-native-reusables dependency for v1 because a DOM-inspired component inventory encourages false parity and adds dependencies around controls that should differ between iOS and Android. Shared tokens and semantic component names provide consistency. Native behavior remains native.
 
 Icons use semantic names mapped to SF Symbols on Apple, Material Symbols on Android, and Lucide on desktop. There are no emoji icons. The mobile editor is one uninterrupted writing surface with a compact, keyboard-aware formatting bar. Desktop uses a resizable folder, note-list, and editor layout. Chrome recedes as soon as typing begins. Sync has explicit states: local only, synced with time, pending count, syncing stage, offline, retry scheduled, authorization required, upgrade required, and error with an action. No state is an endless spinner.
 
@@ -508,10 +508,10 @@ Desktop global hotkeys and tray behavior need explicit enablement and conflict h
 2. **Local state is authoritative.** Sync only adds validated remote changes to local CRDT state. It never replaces a local database with a remote file and never clears an outbox because of a remote error.
 3. **Sync is idempotent and resumable.** Transaction IDs, Yjs update idempotency, content-addressed objects, saved upload sessions, and durable change cursors make retries safe.
 4. **Readers see an atomic protocol commit.** Writers upload immutable objects first and publish an immutable head last. Readers ignore unreferenced objects and invalid heads.
-5. **Corruption is contained.** A bad length, hash, AEAD tag, schema value, or CRDT update moves the object to a local quarantine record. Jolt skips it, preserves local data, and reports the file ID and recovery action without logging content.
+5. **Corruption is contained.** A bad length, hash, AEAD tag, schema value, or CRDT update moves the object to a local quarantine record. Jot skips it, preserves local data, and reports the file ID and recovery action without logging content.
 6. **Versions gate reads and writes.** Every bootstrap, head, object, catalog, schema document, and envelope declares its format. An older client that sees an unsupported minimum reader does not parse it. One that sees an unsupported minimum writer keeps local edits and stops remote publication until upgrade.
 7. **Deletion is monotonic within its retention horizon.** Deletion creates a tombstone event. Garbage collection waits for grace periods and device acknowledgement. A stale device reboots from a current checkpoint before publishing.
-8. **Exports do not depend on remote health.** Jolt can export all locally available, unlocked data while signed out, offline, rate-limited, or facing corrupt remote objects.
+8. **Exports do not depend on remote health.** Jot can export all locally available, unlocked data while signed out, offline, rate-limited, or facing corrupt remote objects.
 9. **The relay is never authoritative.** Losing its database, receiving a forged wakeup, or missing every notification can delay sync but cannot lose, alter, decrypt, or falsely commit user content. The next successful Drive cursor check recovers.
 
 #### Local write protocol
@@ -541,14 +541,14 @@ The local diagnostic log is structured, bounded, content-free, and user-viewable
 
 The relay has separate operational metrics for route counts, webhook validation failures, delivery status classes, queue depth, latency, and expired-record cleanup. It has no client diagnostic upload endpoint. Relay logs must never contain notification endpoints, raw capabilities, channel tokens, request bodies, Drive resource identifiers, IP addresses beyond the hosting provider's minimum security retention, or any field derived from user content.
 
-Sync errors always include the retained local state, plain cause, last successful sync time, pending item count, and next action. Examples include "Google access expired. Reconnect Drive," "Drive is rate-limiting Jolt. Retrying at 14:32," and "One remote object failed integrity checks. Your local note was not changed."
+Sync errors always include the retained local state, plain cause, last successful sync time, pending item count, and next action. Examples include "Google access expired. Reconnect Drive," "Drive is rate-limiting Jot. Retrying at 14:32," and "One remote object failed integrity checks. Your local note was not changed."
 
 The relay reveals aggregate notification health, but it cannot reveal editor, persistence, merge, migration, or export failures. The team will not know those field failure rates unless users export logs. That is consistent with the privacy promise, but it raises the value of user-initiated diagnostics and pre-release test cohorts.
 
 ## 2. Monorepo layout
 
 ```text
-jolt/
+jot/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                     # shared lint, type, schema, sync, and format checks
@@ -812,7 +812,7 @@ Every remote file begins with or contains these fields from the first commit:
 
 | Field | Meaning |
 | --- | --- |
-| `magic` | Fixed Jolt file marker and kind. |
+| `magic` | Fixed Jot file marker and kind. |
 | `remoteFormatVersion` | Exact container encoding version, initially 1. |
 | `minReaderVersion`, `minWriterVersion` | Compatibility gates. |
 | `vaultId`, `objectId`, `kind` | Namespace, identity, and payload kind. |
@@ -920,7 +920,7 @@ Do not cut IME, autocorrect, selection, undo, 5,000-word performance, release ha
 
 Estimate: 12 to 16 weeks.
 
-Runnable result: a person can use Jolt every day on one iOS or Android device without an account.
+Runnable result: a person can use Jot every day on one iOS or Android device without an account.
 
 Work:
 
@@ -984,7 +984,7 @@ Risky unknowns:
 - Background scheduling limits and user expectations for sync delay.
 - Drive channel expiry, renewal races, and silent-push throttling.
 - Convex log retention, metadata deletion, regional processing, cost, and incident behavior.
-- Anonymous relay abuse without a Jolt account, especially on desktop where strong app attestation is unavailable.
+- Anonymous relay abuse without a Jot account, especially on desktop where strong app attestation is unavailable.
 - Safe compaction when a device returns after months offline.
 
 Safe cuts:
@@ -1067,7 +1067,7 @@ Safe cuts:
 
 Estimate: 13 to 18 weeks.
 
-Runnable result: local and synced Jolt vaults open on macOS and Windows with the ProseMirror editor and complete desktop workflows.
+Runnable result: local and synced Jot vaults open on macOS and Windows with the ProseMirror editor and complete desktop workflows.
 
 Work:
 

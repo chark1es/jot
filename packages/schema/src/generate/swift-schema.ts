@@ -26,7 +26,7 @@ function emitAttrStruct(name: string, attrs: Readonly<Record<string, AttrSpec>>)
     .join(", ");
   const assigns = fields.map(([field]) => `        self.${field} = ${field}`).join("\n");
   return `
-public struct Jolt${swiftTypeName(name)}Attrs: Sendable, Equatable {
+public struct Jot${swiftTypeName(name)}Attrs: Sendable, Equatable {
 ${props}
 
     public init(${params}) {
@@ -36,7 +36,7 @@ ${assigns}
 `;
 }
 
-export function emitJoltSchemaSwift(): string {
+export function emitJotSchemaSwift(): string {
   const nodeCases = Object.keys(NODE_SPECS)
     .map((name) => `    case ${name} = "${name}"`)
     .join("\n");
@@ -51,15 +51,15 @@ export function emitJoltSchemaSwift(): string {
     .join("");
   return `${GENERATED_HEADER}
 
-public enum JoltSchema {
+public enum JotSchema {
     public static let version: Int = ${String(SCHEMA_VERSION)}
 }
 
-public enum JoltNodeType: String, CaseIterable, Sendable, Equatable {
+public enum JotNodeType: String, CaseIterable, Sendable, Equatable {
 ${nodeCases}
 }
 
-public enum JoltMarkType: String, CaseIterable, Sendable, Equatable {
+public enum JotMarkType: String, CaseIterable, Sendable, Equatable {
 ${markCases}
 }
 ${nodeAttrs}${markAttrs}`;

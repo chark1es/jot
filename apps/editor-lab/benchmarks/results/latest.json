@@ -1,0 +1,41 @@
+{
+  "environment": "bun",
+  "generatedAt": "2026-09-09T00:10:29.287Z",
+  "yjsVersion": "13.6.32",
+  "comment": "Numbers are local bun, not Hermes. A Hermes release-build on device is still required before CRDT choice is closed. Engines not requested this run were copied from the previous latest.json.",
+  "engines": [
+    {
+      "engine": "yjs",
+      "status": "ran",
+      "notes": "Yjs 13.6.32 via YjsCrdtDocument. 1000 insertText ops. bun, not Hermes.",
+      "timingsMs": {
+        "apply1000": 37.761667,
+        "encode": 1.4300000000000068,
+        "decode": 0.7459170000000057,
+        "updateBytes": 1152
+      }
+    },
+    {
+      "engine": "loro",
+      "status": "ran",
+      "notes": "loro-crdt loaded under bun. Still not a Hermes result.",
+      "timingsMs": {
+        "apply1000": 4.764375000000001,
+        "encode": 2.1032499999999885,
+        "decode": 1.0092909999999904,
+        "updateBytes": 387
+      }
+    },
+    {
+      "engine": "automerge",
+      "status": "ran",
+      "notes": "@automerge/automerge loaded under bun. Still not a Hermes result.",
+      "timingsMs": {
+        "apply1000": 71.31883400000001,
+        "encode": 1.1381250000000023,
+        "decode": 12.658625,
+        "updateBytes": 202
+      }
+    }
+  ]
+}

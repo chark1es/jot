@@ -3,7 +3,7 @@ import { NotImplementedCryptoEngine } from './not-implemented.js';
 import type { CryptoEngine } from './engine.js';
 import { AEAD_SUITE_ID, ARGON2ID_DEFAULT, ARGON2ID_LOW_MEMORY_DISCLOSED } from './types.js';
 
-describe('@jolt/crypto', () => {
+describe('@jot/crypto', () => {
   it('exposes Argon2id v1.3 default 64 MiB / 3 passes / 4 lanes', () => {
     expect(ARGON2ID_DEFAULT).toEqual({
       version: '1.3',

@@ -19,6 +19,8 @@ apps/mobile/android/.gradle/
 apps/mobile/android/app/build/
 apps/editor-lab/ios/Pods/
 apps/editor-lab/android/.gradle/
+packages/*/android/.gradle/
+packages/*/android/build/
 *.jks
 *.keystore
 !debug.keystore
@@ -48,8 +50,14 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/tasks.json
 *.swp
 
 # Generated local
 .cache/
+.impeccable/
 tmp/
+.jot/
+
+# Editor-lab CRDT bench runs (keep committed sample latest.json)
+apps/editor-lab/benchmarks/results/run-*.json

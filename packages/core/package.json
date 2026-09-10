@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/core",
+  "name": "@jot/core",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -14,17 +14,18 @@
     "build:types": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "bun --bun vitest run",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/change-wakeup": "workspace:*",
-    "@jolt/crypto": "workspace:*",
-    "@jolt/local-store": "workspace:*",
-    "@jolt/schema": "workspace:*",
-    "@jolt/storage": "workspace:*"
+    "@jot/change-wakeup": "workspace:*",
+    "@jot/crypto": "workspace:*",
+    "@jot/local-store": "workspace:*",
+    "@jot/schema": "workspace:*",
+    "@jot/storage": "workspace:*",
+    "yjs": "13.6.32"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
 # Relay
 
-Jolt operates a content-blind change-wakeup relay. Official clients never send it note text, titles, CRDT bytes, encryption keys, Google account ids, file names, OAuth codes, or Drive tokens. This package is the Phase 0 interface and policy check, not a deployed Convex app.
+Jot operates a content-blind change-wakeup relay. Official clients never send it note text, titles, CRDT bytes, encryption keys, Google account ids, file names, OAuth codes, or Drive tokens. This package is the Phase 0 interface and policy check, not a deployed Convex app.
 
 ## Forbidden data
 

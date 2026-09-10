@@ -1,6 +1,6 @@
-import type { Clock, LogicalTime, WallTime } from '@jolt/core';
-import { nextLogicalTime } from '@jolt/core';
-import type { DeviceId } from '@jolt/schema';
+import type { Clock, LogicalTime, WallTime } from '@jot/core';
+import { nextLogicalTime } from '@jot/core';
+import type { DeviceId } from '@jot/schema';
 
 export class FakeClock implements Clock {
   private wallMs: number;

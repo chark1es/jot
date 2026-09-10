@@ -8,7 +8,7 @@ use zeroize::Zeroize;
 /// XChaCha20-Poly1305 nonce length in bytes.
 pub const XCHACHA_NONCE_LEN: usize = 24;
 
-/// Returns true when this crate is linked into a Jolt target.
+/// Returns true when this crate is linked into a Jot target.
 pub fn rust_core_available() -> bool {
     true
 }

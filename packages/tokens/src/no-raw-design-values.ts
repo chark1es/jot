@@ -98,10 +98,10 @@ export const noRawDesignValuesRule: Rule.RuleModule = {
     type: 'problem',
     docs: {
       description:
-        'Forbid raw hex/rgb/hsl colors outside @jolt/tokens. Use generated tokens. OS semantic values mapped by the generator are allowed.',
+        'Forbid raw hex/rgb/hsl colors outside @jot/tokens. Use generated tokens. OS semantic values mapped by the generator are allowed.',
     },
     messages: {
-      raw: 'Raw design value "{{value}}". Import a token from @jolt/tokens instead.',
+      raw: 'Raw design value "{{value}}". Import a token from @jot/tokens instead.',
     },
     schema: [],
   },
@@ -130,7 +130,7 @@ export const noRawDesignValuesRule: Rule.RuleModule = {
 
 export const tokensEslintPlugin: ESLint.Plugin = {
   meta: {
-    name: '@jolt/tokens',
+    name: '@jot/tokens',
     version: '0.0.0',
   },
   rules: {

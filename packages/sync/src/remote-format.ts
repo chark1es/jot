@@ -1,6 +1,6 @@
 export const REMOTE_FORMAT_VERSION = 1 as const;
 
-export const REMOTE_MAGIC = 'JOLT' as const;
+export const REMOTE_MAGIC = 'JOT' as const;
 
 export const REMOTE_OBJECT_KINDS = [
   'crdtDeltaPack',

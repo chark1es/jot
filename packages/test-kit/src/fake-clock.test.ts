@@ -3,7 +3,7 @@ import { FakeClock } from './fake-clock.js';
 import { createSeededPrng, nextBase32Id } from './prng.js';
 import { nextDeviceId } from './ids.js';
 
-describe('@jolt/test-kit', () => {
+describe('@jot/test-kit', () => {
   it('FakeClock Lamport increments past max(local, observed)', () => {
     const clock = new FakeClock(1_700_000_000_000);
     const prng = createSeededPrng(1);

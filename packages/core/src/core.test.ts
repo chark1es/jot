@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { FOLDER_CYCLE_REPAIR_RULE, newestParentEdgeToRemove } from './folder-cycle.js';
 import { evaluateSchemaGate } from './schema-gate.js';
-import type { FolderId } from '@jolt/schema';
-import type { DeviceId } from '@jolt/schema';
+import type { FolderId } from '@jot/schema';
+import type { DeviceId } from '@jot/schema';
 import { nextLogicalTime } from './clock.js';
 import { UnsupportedCrdtDocument } from './crdt.js';
 
-describe('@jolt/core', () => {
+describe('@jot/core', () => {
   it('Lamport nextLogical increments past max(local, observed)', () => {
     const device = 'aaaaaaaaaaaaaaaaaaaaaaaaaa' as DeviceId;
     const other = 'bbbbbbbbbbbbbbbbbbbbbbbbbb' as DeviceId;

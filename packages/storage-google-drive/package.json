@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/storage-google-drive",
+  "name": "@jot/storage-google-drive",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -18,10 +18,10 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/change-wakeup": "workspace:*",
-    "@jolt/storage": "workspace:*"
+    "@jot/change-wakeup": "workspace:*",
+    "@jot/storage": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

@@ -1,5 +1,5 @@
-import type { ChangeWakeup } from '@jolt/change-wakeup';
-import type { StorageProvider } from '@jolt/storage';
+import type { ChangeWakeup } from '@jot/change-wakeup';
+import type { StorageProvider } from '@jot/storage';
 
 /**
  * README: StorageProvider adapter for the user's Drive folder.

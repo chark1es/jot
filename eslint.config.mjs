@@ -32,6 +32,9 @@ export default tseslint.config(
       "**/vitest.config.ts",
       "**/eslint-plugin.mjs",
       "eslint.config.mjs",
+      "**/metro.config.cjs",
+      "**/metro-shims/**",
+      "apps/editor-lab/benchmarks/**",
     ],
   },
   js.configs.recommended,
@@ -193,10 +196,10 @@ export default tseslint.config(
                 "import-export",
               ],
             },
-            {
-              from: { type: "app-editor-lab" },
-              allow: ["schema", "tokens", "editor-native", "ui-mobile", "test-kit"],
-            },
+    {
+      from: { type: "app-editor-lab" },
+      allow: ["schema", "tokens", "core", "editor-native", "ui-mobile", "test-kit"],
+    },
           ],
         },
       ],
@@ -208,6 +211,7 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
+      "tokens/no-raw-design-values": "off",
     },
   },
 );

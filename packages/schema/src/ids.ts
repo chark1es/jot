@@ -27,7 +27,7 @@ export type VaultId = string & { readonly [vaultIdBrand]: "VaultId" };
 export type TransactionId = string & { readonly [transactionIdBrand]: "TransactionId" };
 export type AttachmentId = string & { readonly [attachmentIdBrand]: "AttachmentId" };
 
-export type JoltId =
+export type JotId =
   | NoteId
   | FolderId
   | TagId
@@ -94,7 +94,7 @@ export function isId(value: string): boolean {
 }
 
 /* eslint-disable @typescript-eslint/no-unnecessary-type-parameters -- branded ID constructors */
-export function parseId<T extends JoltId = NodeId>(value: string): T {
+export function parseId<T extends JotId = NodeId>(value: string): T {
   if (value.length !== ID_LENGTH) {
     throw new IdError("invalid-length", `id must be ${String(ID_LENGTH)} characters`);
   }
@@ -108,7 +108,7 @@ export function parseId<T extends JoltId = NodeId>(value: string): T {
   return value as T;
 }
 
-export function createId<T extends JoltId = NodeId>(): T {
+export function createId<T extends JotId = NodeId>(): T {
   const bytes = new Uint8Array(ID_BYTE_LENGTH);
   crypto.getRandomValues(bytes);
   return encodeBase32(bytes) as T;
@@ -118,7 +118,7 @@ function mix32(h: number, byte: number, mul: number): number {
   return Math.imul(h ^ byte, mul) >>> 0;
 }
 
-export function deriveId<T extends JoltId = NodeId>(
+export function deriveId<T extends JotId = NodeId>(
   parentId: string,
   purpose: string,
   index: number,

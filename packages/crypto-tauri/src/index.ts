@@ -1,4 +1,4 @@
-import type { CryptoEngine } from '@jolt/crypto';
+import type { CryptoEngine } from '@jot/crypto';
 
 /**
  * README: Tauri adapter to the Rust crypto core and desktop key stores.

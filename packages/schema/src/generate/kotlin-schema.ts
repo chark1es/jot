@@ -22,13 +22,13 @@ function emitAttrData(name: string, attrs: Readonly<Record<string, AttrSpec>>): 
     .map(([field, spec]) => `    val ${field}: ${kotlinAttrType(spec)}`)
     .join(",\n");
   return `
-data class Jolt${swiftTypeName(name)}Attrs(
+data class Jot${swiftTypeName(name)}Attrs(
 ${params},
 )
 `;
 }
 
-export function emitJoltSchemaKt(): string {
+export function emitJotSchemaKt(): string {
   const nodeCases = Object.keys(NODE_SPECS)
     .map((name) => `    ${kotlinEnumName(name)}("${name}"),`)
     .join("\n");
@@ -43,15 +43,15 @@ export function emitJoltSchemaKt(): string {
     .join("");
   return `${GENERATED_HEADER}
 
-object JoltSchema {
+object JotSchema {
     const val VERSION: Int = ${String(SCHEMA_VERSION)}
 }
 
-enum class JoltNodeType(val typeName: String) {
+enum class JotNodeType(val typeName: String) {
 ${nodeCases}
 }
 
-enum class JoltMarkType(val typeName: String) {
+enum class JotMarkType(val typeName: String) {
 ${markCases}
 }
 ${nodeAttrs}${markAttrs}`;

@@ -1,4 +1,4 @@
-import type { DeviceId, LogicalTime } from '@jolt/schema';
+import type { DeviceId, LogicalTime } from '@jot/schema';
 
 export type { LogicalTime };
 

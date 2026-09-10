@@ -1,4 +1,4 @@
-import type { ChangeWakeup } from '@jolt/change-wakeup';
+import type { ChangeWakeup } from '@jot/change-wakeup';
 
 export class RelayNotConfiguredError extends Error {
   override readonly name = 'RelayNotConfiguredError';

@@ -1,4 +1,4 @@
-# Jolt desktop
+# Jot desktop
 
 Tauri v2 shell. Hello-world only.
 

@@ -9,7 +9,7 @@ const fixturePath = path.resolve(
   '../fixtures/remote-format/head-unencrypted.json',
 );
 
-describe('@jolt/sync remote format', () => {
+describe('@jot/sync remote format', () => {
   it('parses the version 1 unencrypted head fixture', async () => {
     const json: unknown = JSON.parse(await readFile(fixturePath, 'utf8'));
     const head = parseRemoteHead(json);

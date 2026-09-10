@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/schema",
+  "name": "@jot/schema",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },

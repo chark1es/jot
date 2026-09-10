@@ -14,10 +14,10 @@ import {
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const FORBIDDEN_PACKAGES = [
-  '@jolt/schema',
-  '@jolt/core',
-  '@jolt/sync',
-  '@jolt/storage-google-drive',
+  '@jot/schema',
+  '@jot/core',
+  '@jot/sync',
+  '@jot/storage-google-drive',
 ] as const;
 
 function expectForbidden(record: Record<string, unknown>): void {

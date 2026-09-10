@@ -2,5 +2,5 @@
  * README: shadcn, Radix, and Tailwind components.
  * Phase 0 stub. No production implementation.
  */
-export { PLATFORMS } from '@jolt/tokens';
-export const packageName = '@jolt/ui-desktop';
+export { PLATFORMS } from '@jot/tokens';
+export const packageName = '@jot/ui-desktop';

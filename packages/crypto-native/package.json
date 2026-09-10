@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/crypto-native",
+  "name": "@jot/crypto-native",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -18,9 +18,9 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/crypto": "workspace:*"
+    "@jot/crypto": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

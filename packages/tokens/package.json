@@ -1,16 +1,16 @@
 {
-  "name": "@jolt/tokens",
+  "name": "@jot/tokens",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./generated": {
-      "@jolt/source": "./generated/tokens.ts",
+      "@jot/source": "./generated/tokens.ts",
       "types": "./generated/tokens.ts",
       "default": "./generated/tokens.ts"
     },

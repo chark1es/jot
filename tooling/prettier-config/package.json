@@ -1,5 +1,5 @@
 {
-  "name": "@jolt/prettier-config",
+  "name": "@jot/prettier-config",
   "private": true,
   "version": "0.0.0",
   "type": "module",

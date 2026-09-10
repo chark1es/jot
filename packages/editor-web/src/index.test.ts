@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WEB_EDITOR_STACK } from './index.js';
 import type { EditorHost } from './index.js';
 
-describe('@jolt/editor-web', () => {
+describe('@jot/editor-web', () => {
   it('names the desktop editor stack without bundling it', () => {
     expect(WEB_EDITOR_STACK).toEqual(['TipTap', 'ProseMirror']);
   });

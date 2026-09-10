@@ -1,0 +1,49 @@
+{
+  "status": "not-run",
+  "notBun": true,
+  "comment": "Fill this file from a Hermes release build on hardware. Leave nulls until then. Do not paste bun CRDT or bun sqlite timings here.",
+  "buildType": null,
+  "releaseRequired": true,
+  "deviceModel": null,
+  "osVersion": null,
+  "hermes": null,
+  "scroll5000Word": {
+    "jank": null,
+    "memoryNote": null
+  },
+  "typingWithJournal": {
+    "ok": null,
+    "notes": null
+  },
+  "ime": {
+    "commit": null,
+    "cancel": null
+  },
+  "killRelaunch": {
+    "survived": null
+  },
+  "screenReader": {
+    "voiceOver": null,
+    "talkBack": null
+  },
+  "interactionBudget60fps": {
+    "met": null,
+    "notes": null
+  },
+  "durabilityLatencyMs": {
+    "p50": null,
+    "p95": null,
+    "p99": null
+  },
+  "crdtHermes": {
+    "yjs": null,
+    "loro": null,
+    "automerge": null
+  },
+  "packageSize": {
+    "heapNote": null,
+    "coldOpenNote": null,
+    "updateSizeNote": null,
+    "binaryContributionNote": null
+  }
+}

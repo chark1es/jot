@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/local-store-expo",
+  "name": "@jot/local-store-expo",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -14,14 +14,15 @@
     "build:types": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "bun --bun vitest run",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/local-store": "workspace:*",
-    "@jolt/schema": "workspace:*"
+    "@jot/local-store": "workspace:*",
+    "@jot/schema": "workspace:*",
+    "expo-sqlite": "57.0.2"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

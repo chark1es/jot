@@ -12,7 +12,7 @@ export type WrappedKey = Brand<Uint8Array, 'WrappedKey'>;
  *
  * The 32 MiB / 4-pass profile is a disclosed fallback for low-memory devices.
  * It is never applied silently. The weakest stored wrapper sets the offline
- * attack cost, so Jolt must not add a low-memory wrapper merely for convenience.
+ * attack cost, so Jot must not add a low-memory wrapper merely for convenience.
  */
 export type Argon2idParams = {
   readonly version: '1.3';

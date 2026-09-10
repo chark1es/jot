@@ -1,4 +1,4 @@
-// TODO: import allowed-field constants from @jolt/change-wakeup once that
+// TODO: import allowed-field constants from @jot/change-wakeup once that
 // package exports the relay protocol field lists. Duplicated here for Phase 0.
 
 export const ALLOWED_FIELDS = {

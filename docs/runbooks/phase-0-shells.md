@@ -18,6 +18,16 @@ Editor lab is the same SDK, different app:
 bun run dev:editor-lab
 ```
 
+Install a development build on the selected device with **Cmd+Ctrl+I**, or **Cmd+Shift+B** (default build task). Pick a device with **Cmd+Ctrl+Shift+I**.
+
+```sh
+bun run devices
+bun run devices:select
+bun run install:device
+```
+
+Selection is stored in `.jot/selected-device.json`. If nothing is saved, install uses the single booted simulator / connected adb device. Multiple ready devices require `devices:select` first. Default app is editor-lab; `bun scripts/device.ts install --app mobile` targets `@jot/mobile`.
+
 ## Desktop
 
 Needs Rust on PATH.
@@ -37,3 +47,5 @@ You cannot launch iOS, Android, macOS, and Windows from one machine in one comma
 - `.github/workflows/desktop.yml` macOS and Windows Tauri builds
 
 `bun run check` is the host-local shared gate. It skips the native app packages.
+
+`bun run test:native-editor` is a separate gate: `xcrun swiftc -parse` on Foundation editor sources (darwin) and LinearModel JUnit when a JDK + kotlinc are present. Linux skips iOS. Missing Android SDK/kotlinc skips Android. Do not add it to `check` until CI images all have those toolchains. See `packages/editor-native/native-tests/ios-linear.md` and `android-linear.md`.

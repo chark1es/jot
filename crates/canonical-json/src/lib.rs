@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn does_not_escape_slash() {
         let encoded =
-            canonicalize(&CanonicalValue::String("https://jolt.local".to_string())).unwrap();
-        assert_eq!(encoded, br#""https://jolt.local""#);
+            canonicalize(&CanonicalValue::String("https://jot.local".to_string())).unwrap();
+        assert_eq!(encoded, br#""https://jot.local""#);
     }
 }

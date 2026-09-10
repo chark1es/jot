@@ -1,12 +1,12 @@
 [package]
-name = "jolt-crypto-core"
+name = "jot-crypto-core"
 version = "0.0.0"
 edition = "2021"
 publish = false
-description = "Shared RustCrypto core for Jolt. Phase 0 links the crate; Phase 3 implements envelopes."
+description = "Shared RustCrypto core for Jot. Phase 0 links the crate; Phase 3 implements envelopes."
 
 [lib]
-name = "jolt_crypto_core"
+name = "jot_crypto_core"
 path = "src/lib.rs"
 
 [dependencies]

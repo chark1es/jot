@@ -5,11 +5,11 @@ Date: 2026-09-08
 
 ## Decision
 
-Jolt operates a `ChangeWakeup` relay that stores opaque notification metadata only. Official clients never send it user content, encryption keys, Google identity, or Drive credentials. Sync remains correct if the relay is deleted.
+Jot operates a `ChangeWakeup` relay that stores opaque notification metadata only. Official clients never send it user content, encryption keys, Google identity, or Drive credentials. Sync remains correct if the relay is deleted.
 
 ## Why
 
-Drive push channels require a public HTTPS webhook. Putting Drive tokens or file bodies on that host would make Jolt a content proxy. A wakeup can only say that a topic may be dirty. Clients always verify through Drive `changes.list`.
+Drive push channels require a public HTTPS webhook. Putting Drive tokens or file bodies on that host would make Jot a content proxy. A wakeup can only say that a topic may be dirty. Clients always verify through Drive `changes.list`.
 
 ## Consequences
 

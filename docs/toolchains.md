@@ -12,4 +12,4 @@ Recorded 2026-09-08 for Phase 0 shells. CI must use these or newer patch release
 | Swift | 6.3.3 | Xcode on macOS CI. |
 | Recommended OS floors | iOS 17, Android API 29, macOS 13, Windows 10 1903 + Evergreen WebView2 | Older support is an open Phase 1 question. |
 
-Hermes runs mobile JavaScript. JavaScriptCore or WebView2 runs the desktop frontend. Rust runs the Tauri host and `jolt-crypto-core`.
+Hermes runs mobile JavaScript. JavaScriptCore or WebView2 runs the desktop frontend. Rust runs the Tauri host and `jot-crypto-core`.

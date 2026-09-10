@@ -1,5 +1,5 @@
 {
-  "name": "@jolt/desktop",
+  "name": "@jot/desktop",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist src-tauri/target"
   },
   "dependencies": {
-    "@jolt/tokens": "workspace:*",
+    "@jot/tokens": "workspace:*",
     "@tauri-apps/api": "2.11.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"

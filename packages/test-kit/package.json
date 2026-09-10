@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/test-kit",
+  "name": "@jot/test-kit",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -18,10 +18,10 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/core": "workspace:*",
-    "@jolt/schema": "workspace:*"
+    "@jot/core": "workspace:*",
+    "@jot/schema": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

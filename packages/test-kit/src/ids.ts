@@ -1,4 +1,4 @@
-import type { DeviceId, FolderId, NoteId, TagId } from '@jolt/schema';
+import type { DeviceId, FolderId, NoteId, TagId } from '@jot/schema';
 import { nextBase32Id, type SeededPrng } from './prng.js';
 
 export function nextNoteId(prng: SeededPrng): NoteId {

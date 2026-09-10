@@ -3,7 +3,7 @@
  * An older client that sees an unsupported minimum reader does not parse it.
  * An unsupported minimum writer keeps local edits and stops remote publication.
  *
- * Pass `@jolt/schema` SCHEMA_VERSION as localSchemaVersion.
+ * Pass `@jot/schema` SCHEMA_VERSION as localSchemaVersion.
  */
 export type SchemaGate =
   | { readonly status: 'compatible' }

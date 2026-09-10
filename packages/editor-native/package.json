@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/editor-native",
+  "name": "@jot/editor-native",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -18,9 +18,16 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/schema": "workspace:*"
+    "@jot/schema": "workspace:*",
+    "expo-modules-core": "57.0.17"
+  },
+  "peerDependencies": {
+    "expo": "57.0.21",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*",
+    "@types/react": "19.2.2"
   }
 }

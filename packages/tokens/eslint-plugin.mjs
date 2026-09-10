@@ -1,7 +1,7 @@
 /** @type {import("eslint").ESLint.Plugin} */
 const plugin = {
   meta: {
-    name: "@jolt/tokens",
+    name: "@jot/tokens",
     version: "0.0.0",
   },
   rules: {
@@ -10,10 +10,10 @@ const plugin = {
         type: "problem",
         docs: {
           description:
-            "Forbid raw hex/rgb/hsl colors outside @jolt/tokens. Use generated tokens.",
+            "Forbid raw hex/rgb/hsl colors outside @jot/tokens. Use generated tokens.",
         },
         messages: {
-          raw: 'Raw design value "{{value}}". Import a token from @jolt/tokens instead.',
+          raw: 'Raw design value "{{value}}". Import a token from @jot/tokens instead.',
         },
         schema: [],
       },

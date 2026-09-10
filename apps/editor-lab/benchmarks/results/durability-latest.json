@@ -1,0 +1,39 @@
+{
+  "environment": "bun",
+  "bunVersion": "1.3.14",
+  "platform": "darwin",
+  "arch": "arm64",
+  "generatedAt": "2026-09-09T00:13:21.393Z",
+  "notHermes": true,
+  "notDeviceJournal": true,
+  "comment": "Host bun timings only. Phase 0.5 p95/p99 durability latency is native SQLite on a release device build. MemoryDurableIntake is a baseline, not a substitute.",
+  "n": 1000,
+  "warmup": 50,
+  "payloadBytes": 275,
+  "cases": [
+    {
+      "name": "memoryDurableIntake",
+      "status": "ran",
+      "role": "baseline-not-gate",
+      "notes": "In-process array push. Not SQLite, not fsync, not the Phase 0.5 durability gate.",
+      "n": 1000,
+      "percentilesMs": {
+        "p50Ms": 0.0010000000000012221,
+        "p95Ms": 0.0029590000000006,
+        "p99Ms": 0.007833000000001533
+      }
+    },
+    {
+      "name": "bunSqliteSynchronousFull",
+      "status": "ran",
+      "role": "host-sqlite-not-device-journal",
+      "notes": "bun:sqlite file DB, synchronous=FULL, journal_mode=DELETE, BEGIN IMMEDIATE + INSERT + COMMIT. Host process, not iOS/Android journal, not Hermes.",
+      "n": 1000,
+      "percentilesMs": {
+        "p50Ms": 0.3337500000000091,
+        "p95Ms": 0.46112499999999557,
+        "p99Ms": 0.6396250000000094
+      }
+    }
+  ]
+}

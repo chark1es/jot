@@ -4,7 +4,7 @@ import type {
   AttachmentId,
   DeviceId,
   FolderId,
-  JoltId,
+  JotId,
   NoteId,
   TagId,
 } from "./ids.js";
@@ -24,7 +24,7 @@ export type ClockEvent = {
 };
 
 export type VersionRef = {
-  readonly id: JoltId;
+  readonly id: JotId;
   readonly created: ClockEvent;
 };
 

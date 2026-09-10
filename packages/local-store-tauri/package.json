@@ -1,12 +1,12 @@
 {
-  "name": "@jolt/local-store-tauri",
+  "name": "@jot/local-store-tauri",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "@jolt/source": "./src/index.ts",
+      "@jot/source": "./src/index.ts",
       "import": "./src/index.ts"
     }
   },
@@ -18,10 +18,10 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@jolt/local-store": "workspace:*",
-    "@jolt/schema": "workspace:*"
+    "@jot/local-store": "workspace:*",
+    "@jot/schema": "workspace:*"
   },
   "devDependencies": {
-    "@jolt/tsconfig": "workspace:*"
+    "@jot/tsconfig": "workspace:*"
   }
 }

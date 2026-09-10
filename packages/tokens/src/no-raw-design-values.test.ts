@@ -25,7 +25,7 @@ describe('raw design values', () => {
   });
 
   it('exempts the tokens package and generated files', () => {
-    expect(isExemptPath('/Users/dev/jolt/packages/tokens/src/generate.ts')).toBe(true);
+    expect(isExemptPath('/Users/dev/jot/packages/tokens/src/generate.ts')).toBe(true);
     expect(isExemptPath('packages/tokens/generated/tokens.ts')).toBe(true);
     expect(isExemptPath('/apps/desktop/src/note-list.tsx')).toBe(false);
   });

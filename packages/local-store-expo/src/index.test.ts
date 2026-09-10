@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { createExpoLocalStore, NotImplementedError } from './index.js';
+import { createExpoLocalStore } from './index.js';
 
-describe('@jolt/local-store-expo', () => {
-  it('imports and throws', () => {
-    expect(() => createExpoLocalStore()).toThrow(NotImplementedError);
+describe('@jot/local-store-expo', () => {
+  it('createExpoLocalStore returns a working store', async () => {
+    const store = createExpoLocalStore();
+    await store.open();
+    const noteId = await store.createNote({ title: 'ExpoNote' });
+    const projection = await store.getNoteProjection(noteId);
+    expect(projection?.title).toBe('ExpoNote');
+    const deviceId = await store.getDeviceId();
+    expect(deviceId.length).toBe(26);
+    await store.close();
   });
 });

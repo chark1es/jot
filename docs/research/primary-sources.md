@@ -1,18 +1,18 @@
-# Jolt primary-source research
+# Jot primary-source research
 
 Checked 2026-09-08. This is a research note for the technical design, not an implementation specification. Google, Expo, Tauri, and package behavior is date-sensitive. Recheck the linked pages and the actual Google Cloud quota console before release.
 
 ## Executive conclusions
 
-1. The no-backend architecture is viable, but one premise needs correction. Tauri desktop can use Google's installed-app flow with PKCE, a random loopback port, no meaningful client secret, and a refresh token stored by the app. Google's iOS SDK also persists and refreshes tokens on-device. Current Android guidance is different: `AuthorizationClient` supplies short-lived access tokens and explicitly discourages keeping refresh tokens on-device. It can silently provide a new access token after a grant, so foreground on-device Drive sync remains viable, but Jolt should not promise that its Android app owns a long-lived refresh token. Background and process-restart behavior must be proved in Phase 2.
-2. `drive.file` is the right scope for an app-created, visible `Jolt` folder. It grants access to files the app creates, opens, or that the user shares with it. It does not grant blanket access to every file a user later drops into that folder.
+1. The no-backend architecture is viable, but one premise needs correction. Tauri desktop can use Google's installed-app flow with PKCE, a random loopback port, no meaningful client secret, and a refresh token stored by the app. Google's iOS SDK also persists and refreshes tokens on-device. Current Android guidance is different: `AuthorizationClient` supplies short-lived access tokens and explicitly discourages keeping refresh tokens on-device. It can silently provide a new access token after a grant, so foreground on-device Drive sync remains viable, but Jot should not promise that its Android app owns a long-lived refresh token. Background and process-restart behavior must be proved in Phase 2.
+2. `drive.file` is the right scope for an app-created, visible `Jot` folder. It grants access to files the app creates, opens, or that the user shares with it. It does not grant blanket access to every file a user later drops into that folder.
 3. Drive has a change feed, resumable uploads, and useful integrity metadata. It does not document transactions, locks, a Cloud Storage-style generation precondition, or Drive-specific compare-and-swap behavior for `files.update`. A shared mutable manifest is therefore not a safe source of truth.
 4. Store immutable CRDT update or snapshot objects and immutable blobs, with small per-device heads. Never require two devices to overwrite the same authoritative file. Treat any aggregate manifest as a rebuildable cache.
 5. Yjs v13 is the lowest-risk v1 CRDT choice because its core is JavaScript and avoids WebAssembly under Hermes, and its stable ProseMirror binding is more mature than the alternatives. Loro deserves a Phase 0.5 challenger spike because it has strong rich-text, history, and shallow-snapshot primitives plus an official-organization React Native binding. That binding is young. Automerge currently has the weakest fit because its JavaScript package needs WebAssembly while Hermes still has no documented `global.WebAssembly`, and its ProseMirror binding calls itself beta.
-6. Version history is not close to free. CRDTs provide causal operations and convergence, not a user-friendly version timeline, durable named checkpoints, or cheap indefinite retention. Jolt needs an explicit checkpoint and retention model.
+6. Version history is not close to free. CRDTs provide causal operations and convergence, not a user-friendly version timeline, durable named checkpoints, or cheap indefinite retention. Jot needs an explicit checkpoint and retention model.
 7. Use one native Rust cryptography core on all four platforms, with Argon2id and XChaCha20-Poly1305. This avoids relying on Web Crypto and avoids three subtly different file-format implementations. The FFI and mobile build chain are a real cost and need an early proof.
 8. Use `expo-sqlite` with FTS5 first on mobile. Use a Rust-owned bundled SQLite build on desktop so the exact SQLite and FTS5 configuration is controlled. Share repository contracts, migrations, fixtures, and query semantics, not one concrete database driver.
-9. A tokenless Convex relay can receive empty Drive webhooks and send opaque invalidations without receiving Jolt content or Drive credentials. It improves freshness and reduces polling, but clients must renew their own Drive channels at least weekly. Relay loss must delay discovery only. It must never affect sync correctness.
+9. A tokenless Convex relay can receive empty Drive webhooks and send opaque invalidations without receiving Jot content or Drive credentials. It improves freshness and reduces polling, but clients must renew their own Drive channels at least weekly. Relay loss must delay discovery only. It must never affect sync correctness.
 
 ## 1. Google OAuth on installed apps
 
@@ -49,7 +49,7 @@ For Tauri, use the system browser and a short-lived loopback listener in the Rus
 
 ### Challenge to the product premise
 
-The statement that every installed client receives a real long-lived refresh token is too broad. It holds for Google's generic iOS and desktop installed-app documentation and is visible in Google's current iOS SDK. Current Android authorization guidance says a refresh token is for backend offline access and strongly discourages storing it on-device. Android still appears able to reauthorize silently and keep the zero-backend design, but Google has not given Jolt a contractual guarantee that this works for every OS-managed background execution case.
+The statement that every installed client receives a real long-lived refresh token is too broad. It holds for Google's generic iOS and desktop installed-app documentation and is visible in Google's current iOS SDK. Current Android authorization guidance says a refresh token is for backend offline access and strongly discourages storing it on-device. Android still appears able to reauthorize silently and keep the zero-backend design, but Google has not given Jot a contractual guarantee that this works for every OS-managed background execution case.
 
 Phase 2 must test these cases on Android release builds: process death, reboot, access-token expiry, revoked grant, Credential Manager update, Doze, scheduled background work, and a device offline longer than the access-token lifetime. The honest UI fallback is "Sign in again to resume sync," never silent data loss.
 
@@ -65,13 +65,13 @@ Phase 2 must test these cases on Android release builds: process death, reboot, 
 
 ### Scope and visible folder
 
-Google classifies [`drive.file` as non-sensitive, per-file access](https://developers.google.com/workspace/drive/api/guides/api-specific-auth). It permits creation of new files and modification of files opened with or shared with the app. It works with all Drive REST resources. This is sufficient for a visible `Jolt` folder and all files Jolt itself creates within it. The standard [folder guide](https://developers.google.com/workspace/drive/api/guides/folder) covers creating a regular folder in My Drive.
+Google classifies [`drive.file` as non-sensitive, per-file access](https://developers.google.com/workspace/drive/api/guides/api-specific-auth). It permits creation of new files and modification of files opened with or shared with the app. It works with all Drive REST resources. This is sufficient for a visible `Jot` folder and all files Jot itself creates within it. The standard [folder guide](https://developers.google.com/workspace/drive/api/guides/folder) covers creating a regular folder in My Drive.
 
 Do not use `appDataFolder`. The visible folder satisfies user ownership and inspection. With encryption enabled, users can inspect the files and export them, but their content will intentionally be ciphertext.
 
 Use private `appProperties` for machine-readable type, vault ID, object ID, format version, device ID, and logical epoch. Google documents `appProperties` as private to the requesting app and searchable through authenticated requests in the [File resource](https://developers.google.com/workspace/drive/api/reference/rest/v3/files) and [file search guide](https://developers.google.com/workspace/drive/api/guides/search-files). Do not place secrets or plaintext note titles there.
 
-One boundary matters: `drive.file` does not imply access to arbitrary files merely because the user manually places them under the Jolt folder. Import should use the platform picker or a local file import path. Restore must depend only on Jolt-created files.
+One boundary matters: `drive.file` does not imply access to arbitrary files merely because the user manually places them under the Jot folder. Import should use the platform picker or a local file import path. Restore must depend only on Jot-created files.
 
 ### Remote change detection
 
@@ -94,18 +94,18 @@ Drive push notifications need a public HTTPS webhook endpoint, per Google's [pus
 The layout should avoid an authoritative file that every device overwrites:
 
 ```text
-Jolt/
+Jot/
   vaults/
     vault-<epoch>-<opaque-id>.json
   devices/
-    <device-id>/head-<sequence>.jolt
+    <device-id>/head-<sequence>.jot
   objects/
-    docs/<opaque-content-id>.jolt
-    indexes/<opaque-content-id>.jolt
-    blobs/<opaque-content-id>.jolt
+    docs/<opaque-content-id>.jot
+    indexes/<opaque-content-id>.jot
+    blobs/<opaque-content-id>.jot
   gc/
-    marks/<device-id>-<sequence>.jolt
-    tombstones/<opaque-content-id>.jolt
+    marks/<device-id>-<sequence>.jot
+    tombstones/<opaque-content-id>.jot
 ```
 
 This tree describes a file protocol, not implementation code.
@@ -148,13 +148,13 @@ The [Drive File resource](https://developers.google.com/workspace/drive/api/refe
 - `headRevisionId` for binary Drive content.
 - Output-only MD5, SHA-1, and SHA-256 checksums where available for binary stored content.
 
-Drive checksums help confirm transport, but they are not the vault's trust boundary. The Jolt envelope should authenticate format version, object type, vault ID, object ID, plaintext length, and content hash as AEAD associated data. Encrypted objects then detect both truncation and substitution independently of Drive metadata.
+Drive checksums help confirm transport, but they are not the vault's trust boundary. The Jot envelope should authenticate format version, object type, vault ID, object ID, plaintext length, and content hash as AEAD associated data. Encrypted objects then detect both truncation and substitution independently of Drive metadata.
 
 ### Fresh install
 
 A fresh install should not eagerly download attachments or historical operation logs:
 
-1. Locate the app-created Jolt folder and list only Jolt files, requesting minimal fields and filtering by `appProperties`.
+1. Locate the app-created Jot folder and list only Jot files, requesting minimal fields and filtering by `appProperties`.
 2. Load the newest supported valid vault descriptor by its signed supersession chain, then load per-device heads and the newest valid encrypted index shards.
 3. Reconstruct current note and organization metadata.
 4. Fetch the latest state needed for visible notes first, then hydrate all current note documents in the background so offline completeness eventually becomes true.
@@ -216,13 +216,13 @@ Use foreground polling around 15 to 30 seconds during active editing, immediate 
 | Persistence | Commutative, associative, idempotent incremental updates; state vectors and compact binary state | Checksummed updates, full snapshots, and shallow snapshots | Immutable changes and heads, snapshots, storage compaction designed without backend transactions |
 | History | Snapshot/version examples exist, but retaining restorable deleted content requires disabling GC | Strong built-in checkout/time-travel model with optional timestamps | History follows immutable change graph and heads |
 | Safe aggressive compaction with long-offline peers | Needs careful application policy; merging updates alone does not GC deleted content | Shallow snapshot explicitly cannot accept peers before or concurrent with its start frontier | Storage compaction combines known changes into snapshots while retaining head-addressed safety |
-| Ecosystem maturity for Jolt | Best current fit | Promising, but React Native bridge is early | Good core project, weak current Expo/Hermes and ProseMirror fit |
+| Ecosystem maturity for Jot | Best current fit | Promising, but React Native bridge is early | Good core project, weak current Expo/Hermes and ProseMirror fit |
 
 ### Yjs evidence and recommendation
 
 Yjs [document updates](https://docs.yjs.dev/api/document-updates) are commutative, associative, and idempotent. State vectors can encode only missing operations. `mergeUpdates` removes duplicates without loading a full document, but the docs explicitly say it does not garbage-collect deleted content. A full `Y.Doc` must be loaded for size reduction.
 
-Rich text is not an opaque serialized blob. [`Y.Text`](https://docs.yjs.dev/api/shared-types/y.text) supports formatting attributes over ranges. [`Y.XmlFragment`](https://docs.yjs.dev/api/shared-types/y.xmlfragment), XML elements, and XML text provide a structured tree suitable for ProseMirror. The [ProseMirror integration](https://docs.yjs.dev/ecosystem/editor-bindings/prosemirror) maintains schema conformance and supplies collaborative undo and snapshot examples. The [binding repository](https://github.com/yjs/y-prosemirror) warns that the next-generation `@y/prosemirror` line is still a rewrite, so Jolt should pin the stable Yjs v13 and `y-prosemirror` v1 combination until the new line is stable.
+Rich text is not an opaque serialized blob. [`Y.Text`](https://docs.yjs.dev/api/shared-types/y.text) supports formatting attributes over ranges. [`Y.XmlFragment`](https://docs.yjs.dev/api/shared-types/y.xmlfragment), XML elements, and XML text provide a structured tree suitable for ProseMirror. The [ProseMirror integration](https://docs.yjs.dev/ecosystem/editor-bindings/prosemirror) maintains schema conformance and supplies collaborative undo and snapshot examples. The [binding repository](https://github.com/yjs/y-prosemirror) warns that the next-generation `@y/prosemirror` line is still a rewrite, so Jot should pin the stable Yjs v13 and `y-prosemirror` v1 combination until the new line is stable.
 
 Yjs is recommended for v1 because it avoids the WASM-on-Hermes problem. This is still an inference from its JavaScript implementation, not an official React Native support guarantee. Phase 0.5 must prove it in an Expo release build under Hermes, including random IDs, binary update storage, thousands of edit operations, a 5,000-word native editor document, process restart, and memory reclamation.
 
@@ -236,7 +236,7 @@ The tradeoff is runtime maturity. The normal [JavaScript getting-started path](h
 
 Run Loro as the challenger in Phase 0.5. It wins only if the native binding passes the same crash, convergence, schema round-trip, upgrade, and editor-latency tests and the team is willing to maintain or fork the binding. Its [ProseMirror binding](https://github.com/loro-dev/loro-prosemirror) is useful but smaller and younger than Yjs's.
 
-Loro shallow snapshots are not transparent compaction. The [shallow snapshot documentation](https://www.loro.dev/docs/concepts/shallow_snapshots) says peers can sync only if their versions are after the shallow start point and advises coordinating before trimming. With devices that can remain offline for years, Jolt needs either a known causal horizon across every active device or a versioned epoch reset that makes old clients refuse writes and rebootstrap.
+Loro shallow snapshots are not transparent compaction. The [shallow snapshot documentation](https://www.loro.dev/docs/concepts/shallow_snapshots) says peers can sync only if their versions are after the shallow start point and advises coordinating before trimming. With devices that can remain offline for years, Jot needs either a known causal horizon across every active device or a versioned epoch reset that makes old clients refuse writes and rebootstrap.
 
 ### Automerge
 
@@ -260,7 +260,7 @@ All three CRDTs retain causality beyond the visible text, so years of editing ca
 - Do not remove causal information that an older active client needs. If a compaction changes compatibility, increment a format epoch. Older clients must refuse writes and rebootstrap.
 - Keep product version checkpoints separately from raw CRDT updates. Suggested checkpoints are explicit user restore points plus periodic coalesced snapshots before risky transforms, with retention limits visible in the product.
 
-With Yjs, `mergeUpdates` is not sufficient compaction because it retains deleted content. `Y.Doc.gc` is enabled by default; [Y.Doc documentation](https://docs.yjs.dev/api/y.doc) says disabling it is necessary to restore old content. Therefore indefinite version history and maximum compaction conflict. Jolt must retain selected checkpoints and accept their storage cost, rather than promising every keystroke forever.
+With Yjs, `mergeUpdates` is not sufficient compaction because it retains deleted content. `Y.Doc.gc` is enabled by default; [Y.Doc documentation](https://docs.yjs.dev/api/y.doc) says disabling it is necessary to restore old content. Therefore indefinite version history and maximum compaction conflict. Jot must retain selected checkpoints and accept their storage cost, rather than promising every keystroke forever.
 
 ## 4. Cryptography
 
@@ -289,7 +289,7 @@ Do not tune each device to a stronger, incompatible envelope unless the format s
 
 Use XChaCha20-Poly1305 with a 32-byte key, 24-byte random nonce per encrypted object, and a 16-byte authentication tag. Libsodium's [XChaCha20-Poly1305 documentation](https://doc.libsodium.org/doc/secret-key_cryptography/aead/chacha20-poly1305/xchacha20-poly1305_construction) says random nonces are safe with its extended nonce and recommends it where interoperability is not a concern. The RustCrypto [chacha20poly1305 crate](https://docs.rs/chacha20poly1305/latest/chacha20poly1305/) provides XChaCha20-Poly1305 and reports an NCC Group audit with no significant findings.
 
-Reject AES-256-GCM for the vault format. AES-GCM is widely standardized and fast with hardware support, but a repeated 96-bit nonce under one key is catastrophic. XChaCha's 192-bit nonce makes independently generated random nonces an ordinary and robust file-store strategy across devices. The cost is that XChaCha is not the NIST AES-GCM default and some platform frameworks do not expose it directly, which is why Jolt needs its own native crypto core.
+Reject AES-256-GCM for the vault format. AES-GCM is widely standardized and fast with hardware support, but a repeated 96-bit nonce under one key is catastrophic. XChaCha's 192-bit nonce makes independently generated random nonces an ordinary and robust file-store strategy across devices. The cost is that XChaCha is not the NIST AES-GCM default and some platform frameworks do not expose it directly, which is why Jot needs its own native crypto core.
 
 ### One implementation on all platforms
 
@@ -309,7 +309,7 @@ The rejected alternative is libsodium on every target. Libsodium directly provid
 - Encrypt note contents, titles, tags, folder names and relationships, CRDT bytes, attachment bytes and metadata, search/index shards, and meaningful sync metadata in the Drive copy.
 - Keep only the minimum bootstrap and routing fields outside encryption: file protocol version, opaque vault/object/device IDs, object kind, ciphertext length, and encryption suite/KDF parameters.
 
-Google still sees the visible Jolt folder, account identity, number of files, approximate note and attachment count, exact ciphertext sizes unless padded, file creation and modification times, access patterns, device activity timing, and deletion timing. Random opaque filenames prevent semantic leakage, not traffic analysis. State this in setup and security help.
+Google still sees the visible Jot folder, account identity, number of files, approximate note and attachment count, exact ciphertext sizes unless padded, file creation and modification times, access patterns, device activity timing, and deletion timing. Random opaque filenames prevent semantic leakage, not traffic analysis. State this in setup and security help.
 
 ### Per-note lock semantics
 
@@ -327,9 +327,9 @@ Generate an independent random 256-bit recovery key and use it to create a secon
 
 Setup is incomplete until the user saves and verifies the recovery code. Show, in plain language, before encryption is enabled:
 
-> Jolt has no account and no server. Jolt cannot reset this passphrase. If you lose both the passphrase and recovery code, the encrypted Drive data is permanently unreadable.
+> Jot has no account and no server. Jot cannot reset this passphrase. If you lose both the passphrase and recovery code, the encrypted Drive data is permanently unreadable.
 
-Require confirmation of randomly selected groups or words. Offer print, save to a user-selected file, and password-manager copy. Never upload a plaintext recovery code into the Jolt Drive folder. Allow regeneration only while the vault is unlocked, which replaces the recovery wrapper without re-encrypting the vault.
+Require confirmation of randomly selected groups or words. Offer print, save to a user-selected file, and password-manager copy. Never upload a plaintext recovery code into the Jot Drive folder. Allow regeneration only while the vault is unlocked, which replaces the recovery wrapper without re-encrypting the vault.
 
 ## 5. SQLite persistence and search
 
@@ -345,7 +345,7 @@ At startup, assert `sqlite_compileoption_used('ENABLE_FTS5')` and run a tiny FTS
 
 Tauri's official [SQL plugin](https://v2.tauri.app/plugin/sql/) uses `sqlx`, supports SQLite, and executes its migration set in a transaction. It exposes SQL operations to the frontend through permissions.
 
-For Jolt, prefer a Rust-owned data access layer using [`rusqlite` with its `bundled` feature](https://github.com/rusqlite/rusqlite). The bundled feature compiles and links a controlled SQLite version instead of depending on an old or differently configured system library. SQLite's [FTS5 documentation](https://www.sqlite.org/fts5.html) says FTS5 is present in the amalgamation but controlled by build configuration, so explicitly compile with FTS5 and assert it at runtime.
+For Jot, prefer a Rust-owned data access layer using [`rusqlite` with its `bundled` feature](https://github.com/rusqlite/rusqlite). The bundled feature compiles and links a controlled SQLite version instead of depending on an old or differently configured system library. SQLite's [FTS5 documentation](https://www.sqlite.org/fts5.html) says FTS5 is present in the amalgamation but controlled by build configuration, so explicitly compile with FTS5 and assert it at runtime.
 
 The reasons to reject the generic Tauri SQL plugin as the main boundary are architectural, not because it is defective:
 
@@ -393,7 +393,7 @@ Use Convex only as an optional invalidation relay. Every client authenticates wi
 
 Do not call this service a Drive proxy or put it in the sync data path. It must not hold a Google access token, refresh token, server authorization code, Drive page token, folder ID, file ID, note identifier, encryption key, CRDT update, attachment, or content metadata. It must not expose a generic fetch or upload endpoint. Its outage must reduce freshness only. Direct polling on launch, reconnect, and periodic permitted background work remains the correctness path.
 
-This design preserves the meaningful zero-access property: neither Jolt's application code on the relay nor a compromise of its database gives an attacker a capability to read Drive files. It does not preserve the literal statement that an internet server can never receive arbitrary note bytes. Any caller can send bytes to a public HTTPS endpoint, and the hosting provider terminates TLS before application code can reject them. The supportable promise is narrower and testable: "Jolt clients never send note content or Drive file bytes to the relay; Drive sends empty notification bodies; the relay has no Drive credential or content-ingestion API."
+This design preserves the meaningful zero-access property: neither Jot's application code on the relay nor a compromise of its database gives an attacker a capability to read Drive files. It does not preserve the literal statement that an internet server can never receive arbitrary note bytes. Any caller can send bytes to a public HTTPS endpoint, and the hosting provider terminates TLS before application code can reject them. The supportable promise is narrower and testable: "Jot clients never send note content or Drive file bytes to the relay; Drive sends empty notification bodies; the relay has no Drive credential or content-ingestion API."
 
 ### OAuth and token custody
 
@@ -405,7 +405,7 @@ The recommended custody model remains device-owned:
 | Android | `AuthorizationClient.authorize()` obtains a short-lived access token again without interaction while the grant remains. Google's current guide says backend offline access uses a server authorization code and refresh token, and strongly discourages storing refresh tokens on-device. | The app creates or renews a watch while it can obtain an access token. The relay never receives the token or server authorization code. |
 | macOS and Windows | The Tauri Rust process runs the installed-app PKCE loopback flow and stores its refresh token in Keychain or Windows Credential Manager. | The Rust process creates and renews its own watch. The WebView and relay never receive the refresh token. |
 
-Google's [Android authorization guide](https://developer.android.com/identity/authorization) explicitly supports a backend pattern: request offline access, send the returned server authorization code to the backend, exchange it there, and keep the refresh token there. Convex could technically store such a token and use an action to call Google. Reject that pattern for Jolt. A `drive.file` bearer token is a capability to read Jolt-created Drive files, not a watch-only capability. At-rest database encryption does not prevent Convex functions, a malicious deployment, an administrator with sufficient access, or a compromised runtime from using it.
+Google's [Android authorization guide](https://developer.android.com/identity/authorization) explicitly supports a backend pattern: request offline access, send the returned server authorization code to the backend, exchange it there, and keep the refresh token there. Convex could technically store such a token and use an action to call Google. Reject that pattern for Jot. A `drive.file` bearer token is a capability to read Jot-created Drive files, not a watch-only capability. At-rest database encryption does not prevent Convex functions, a malicious deployment, an administrator with sufficient access, or a compromised runtime from using it.
 
 Encrypting a refresh token before storing it on the relay does not solve renewal. If the relay has the decryption key, the same capability risk remains. If only devices have the key, the relay cannot renew a watch while all devices are offline. An OAuth code broker also receives a credential or authorization code that can become that capability. It fails the same threat goal.
 
@@ -461,13 +461,13 @@ Convex is suitable for this narrow relay, with explicit exclusions:
 
 | Capability | Finding |
 | --- | --- |
-| Webhook endpoint | Suitable. [HTTP actions](https://docs.convex.dev/functions/http-actions) expose public HTTPS endpoints and are intended for webhooks. They receive a raw `Request`; argument validation is entirely application-owned. Request and response bodies can be up to 20 MB, so the handler and provider ingress can technically receive unwanted bytes even though Jolt rejects them. |
+| Webhook endpoint | Suitable. [HTTP actions](https://docs.convex.dev/functions/http-actions) expose public HTTPS endpoints and are intended for webhooks. They receive a raw `Request`; argument validation is entirely application-owned. Request and response bodies can be up to 20 MB, so the handler and provider ingress can technically receive unwanted bytes even though Jot rejects them. |
 | Metadata store and fan-out | Suitable. Mutations are transactional, and [reactive queries](https://docs.convex.dev/realtime) push changed results over WebSockets to connected clients. Store only an opaque generation, not a Drive change. |
-| Google token storage | Technically possible, architecturally rejected. Convex [encrypts data at rest](https://www.convex.dev/security), but its own [encryption explanation](https://www.convex.dev/can-do/encryption) says functions access decrypted data by default. A bearer refresh token would make the service capable of reading Jolt Drive files. |
-| Watch renewal | Suitable only if a token is stored, which Jolt must not do. [Scheduled functions](https://docs.convex.dev/scheduling/scheduled-functions) and [cron jobs](https://docs.convex.dev/scheduling/cron-jobs) can clean expired registrations, schedule push receipt checks, or remind connected clients. They cannot create a Drive watch without user authorization. |
+| Google token storage | Technically possible, architecturally rejected. Convex [encrypts data at rest](https://www.convex.dev/security), but its own [encryption explanation](https://www.convex.dev/can-do/encryption) says functions access decrypted data by default. A bearer refresh token would make the service capable of reading Jot Drive files. |
+| Watch renewal | Suitable only if a token is stored, which Jot must not do. [Scheduled functions](https://docs.convex.dev/scheduling/scheduled-functions) and [cron jobs](https://docs.convex.dev/scheduling/cron-jobs) can clean expired registrations, schedule push receipt checks, or remind connected clients. They cannot create a Drive watch without user authorization. |
 | Reliable jobs | Adequate with a ledger. Scheduling from a mutation is atomic. Scheduled mutations execute exactly once after internal retries, while actions with external side effects execute at most once and are not automatically retried. Push delivery therefore needs explicit retry state and idempotency. Completed scheduled-function records remain available for seven days, so scheduled arguments must contain only opaque IDs. |
 | Rate limiting | Suitable for application abuse controls. Convex's official [rate limiter component](https://github.com/get-convex/rate-limiter) provides transactional token-bucket and fixed-window limits, but its documentation explicitly says application-layer limiting is not the first defense against a sophisticated DDoS attack. Confirm edge abuse protection and spending caps separately. |
-| Mobile push | Suitable through a small action calling the [Expo Push Service](https://docs.expo.dev/push-notifications/sending-notifications/). Expo routes through FCM and APNs, has no SLA, requires retries for `429` and `5xx`, and requires receipt checks. Its documented project limit is 600 notifications per second and payload limit is about 4 KiB. Jolt needs only a tiny generic collapsed invalidation. |
+| Mobile push | Suitable through a small action calling the [Expo Push Service](https://docs.expo.dev/push-notifications/sending-notifications/). Expo routes through FCM and APNs, has no SLA, requires retries for `429` and `5xx`, and requires receipt checks. Its documented project limit is 600 notifications per second and payload limit is about 4 KiB. Jot needs only a tiny generic collapsed invalidation. |
 
 Do not adopt the current [`@convex-dev/expo-push-notifications`](https://github.com/get-convex/expo-push-notifications) component in v1 without a specific review. Its repository package is currently `0.4.1-beta.3`, and its documented design inserts each notification into a table and retains delivery state. That is useful generally but expands stored metadata and supply-chain surface for a one-bit signal. A small direct Expo Push API action with a short-lived receipt ledger is easier to audit. Enable Expo's enhanced push security. If minimizing processors matters more than convenience, call APNs and FCM directly, at higher operational cost.
 
@@ -502,7 +502,7 @@ The reviewed Convex documentation does not describe per-function outbound-domain
 
 A small Cloudflare Worker is a reasonable alternative ingress, but it is not stateless once it must fan out. A plain Worker can reject bodies and validate headers. A per-vault [Durable Object](https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/) adds private, transactional, strongly consistent state and WebSocket coordination. [Queues](https://developers.cloudflare.com/queues/reference/delivery-guarantees/) provide at-least-once delivery for push jobs, so consumers still need idempotency. [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/) can clean expired routes, but cannot renew Drive watches without a token.
 
-Cloudflare gives more direct control over the small protocol and avoids adopting Convex as an application backend. It also requires Jolt to build authentication, schema validation, fan-out, retry, receipt cleanup, migration, admin tooling, and realtime client behavior. Workers accept request bodies much larger than this protocol needs, depending on plan, and newly created Workers have observability enabled by default with up to seven days of log retention, according to the current [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) pages. It does not remove the cloud processor or metadata-leakage issue.
+Cloudflare gives more direct control over the small protocol and avoids adopting Convex as an application backend. It also requires Jot to build authentication, schema validation, fan-out, retry, receipt cleanup, migration, admin tooling, and realtime client behavior. Workers accept request bodies much larger than this protocol needs, depending on plan, and newly created Workers have observability enabled by default with up to seven days of log retention, according to the current [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) pages. It does not remove the cloud processor or metadata-leakage issue.
 
 Choose Convex for v1 if the team accepts it as a metadata processor because its transactional mutations and realtime subscriptions remove useful infrastructure work. Hide it behind a `SyncInvalidationRelay` client interface so a Worker, self-hosted service, or no-relay polling implementation can replace it without touching Drive sync logic. If the product promise evolves from "we never receive note content" to "we operate no persistent user metadata service," omit the relay entirely and accept polling latency.
 
@@ -510,9 +510,9 @@ Choose Convex for v1 if the team accepts it as a metadata processor because its 
 
 | Design | Privacy and compromise impact | Availability behavior | Decision |
 | --- | --- | --- | --- |
-| Direct client polling only | No Jolt-operated service sees activity or device metadata. Google still sees Drive traffic. | No immediate wakeup. Mobile background work is OS-limited. Correct on next poll. | Supported fallback and user opt-out. |
+| Direct client polling only | No Jot-operated service sees activity or device metadata. Google still sees Drive traffic. | No immediate wakeup. Mobile background work is OS-limited. Correct on next poll. | Supported fallback and user opt-out. |
 | Tokenless invalidation relay | Relay sees opaque device and activity metadata but has no credential or bytes that can read a vault. Push adds Expo, APNs, and FCM as metadata processors. | Relay or push outage delays discovery only. A one-week watch lapse is repaired from the local Drive cursor. | Recommended optional default, subject to privacy review. |
-| Token-holding relay | A backend compromise can use `drive.file` credentials to read every Jolt-created Drive object, including plaintext vaults and ciphertext vaults. | Can renew watches when all devices are offline and can orchestrate more background work. | Reject. It conflicts with the intended zero-access claim. |
+| Token-holding relay | A backend compromise can use `drive.file` credentials to read every Jot-created Drive object, including plaintext vaults and ciphertext vaults. | Can renew watches when all devices are offline and can orchestrate more background work. | Reject. It conflicts with the intended zero-access claim. |
 | Drive-byte proxy | The proxy and host receive every byte even if they stream it without storage. Encryption may hide plaintext but does not mean the service never receives note data. | Adds a central dependency to every sync and increases blast radius. | Reject. Clients must transfer directly with Drive. |
 
 Open uncertainties for the design document:
@@ -522,7 +522,7 @@ Open uncertainties for the design document:
 3. Decide whether relay wakeups are default-on, opt-in, or omitted from v1. This is a privacy-product decision, not only infrastructure.
 4. Get contractual answers from Convex on log retention, internal backup deletion, subprocessors, data region, incident access, and deletion SLAs. The public sources do not answer all of them precisely.
 5. Prove Expo silent or data-only notification behavior on supported iOS and Android versions. Expo explicitly provides no SLA, and OS delivery is not guaranteed.
-6. Set explicit TTLs for installations, channel records, push receipts, rate-limit rows, and inactive vault routes. The public Convex documentation does not supply Jolt-specific retention defaults.
+6. Set explicit TTLs for installations, channel records, push receipts, rate-limit rows, and inactive vault routes. The public Convex documentation does not supply Jot-specific retention defaults.
 
 ## Source index
 

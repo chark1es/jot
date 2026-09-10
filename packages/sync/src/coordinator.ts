@@ -1,8 +1,8 @@
-import type { CrdtDocument } from '@jolt/core';
-import type { CryptoEngine } from '@jolt/crypto';
-import type { LocalStore } from '@jolt/local-store';
-import type { StorageProvider } from '@jolt/storage';
-import type { NoteId } from '@jolt/schema';
+import type { CrdtDocument } from '@jot/core';
+import type { CryptoEngine } from '@jot/crypto';
+import type { LocalStore } from '@jot/local-store';
+import type { StorageProvider } from '@jot/storage';
+import type { NoteId } from '@jot/schema';
 
 export type SyncCoordinatorDeps = {
   readonly storage: StorageProvider;

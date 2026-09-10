@@ -1,11 +1,12 @@
 import type {
+  AttachmentId,
   Document,
   Mark,
   NoteId,
   SchemaOperation,
   SchemaSelection,
   TransactionId,
-} from '@jolt/schema';
+} from '@jot/schema';
 
 export type DocumentRevision = number & { readonly __brand: 'DocumentRevision' };
 
@@ -22,11 +23,18 @@ export type EditorCommand =
   | { readonly name: 'toggleUnderline' }
   | { readonly name: 'toggleStrikethrough' }
   | { readonly name: 'toggleInlineCode' }
+  | { readonly name: 'setLink'; readonly href: string; readonly title?: string }
+  | { readonly name: 'unsetLink' }
   | { readonly name: 'setHeading'; readonly level: 1 | 2 | 3 | 4 | 5 | 6 }
   | { readonly name: 'setParagraph' }
   | { readonly name: 'toggleBulletList' }
   | { readonly name: 'toggleOrderedList' }
-  | { readonly name: 'toggleTaskList' };
+  | { readonly name: 'toggleTaskList' }
+  | { readonly name: 'toggleCodeBlock' }
+  | { readonly name: 'toggleBlockquote' }
+  | { readonly name: 'toggleTaskItemChecked' }
+  | { readonly name: 'insertHorizontalRule' }
+  | { readonly name: 'insertImage'; readonly attachmentId: AttachmentId; readonly alt?: string };
 
 export type EditorCapabilities = {
   readonly undo: boolean;
@@ -50,6 +58,7 @@ export type EditorEvent =
       readonly transactionId: TransactionId;
       readonly baseRevision: DocumentRevision;
       readonly operations: readonly SchemaOperation[];
+      readonly inverses: readonly SchemaOperation[];
       readonly selection: SchemaSelection;
     }
   | {
@@ -90,4 +99,50 @@ export interface EditorHost {
 
 export const NATIVE_EDITOR_IMPLEMENTATIONS = ['Swift UITextView', 'Kotlin EditText'] as const;
 
-export type { Document, Mark, NoteId, SchemaOperation, SchemaSelection, TransactionId };
+export type {
+  AttachmentId,
+  Document,
+  Mark,
+  NoteId,
+  SchemaOperation,
+  SchemaSelection,
+  TransactionId,
+};
+
+export { applyOperations, invertOperation, invertOperations } from './apply-operations.js';
+export {
+  MemoryDurableIntake,
+  type DurableIntake,
+  type DurableIntakeRecord,
+} from './durable-intake.js';
+export { HeadlessEditorHost, type EditorEventListener } from './headless-host.js';
+export {
+  JotEditorView,
+  type JotEditorNativeHandle,
+  type JotEditorViewProps,
+} from './JotEditorView.js';
+export {
+  createNativeIntakeLedger,
+  listUnappliedIntake,
+  markIntakeApplied,
+  parseJournalPayload,
+  parseSchemaOperations,
+  readNativeDocumentSnapshot,
+  type NativeIntakeClient,
+  type NativeIntakeClientSource,
+  type NativeIntakeLedger,
+  type NativeIntakeRow,
+} from './native-intake.js';
+export { JOT_EDITOR_VIEW_NAME } from './view-name.js';
+export {
+  documentToLinear,
+  HARD_BREAK_TEXT,
+  linearToDocument,
+  OBJECT_REPLACEMENT,
+  type LinearBlock,
+  type LinearBlockKind,
+  type LinearDocument,
+  type LinearInlineMark,
+  type LinearMarkType,
+  type LinearRun,
+} from './linear.js';

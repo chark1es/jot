@@ -50,7 +50,7 @@ export type {
   AttachmentId,
   DeviceId,
   FolderId,
-  JoltId,
+  JotId,
   NodeId,
   NoteId,
   TagId,

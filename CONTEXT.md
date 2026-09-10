@@ -1,11 +1,11 @@
-# Jolt
+# Jot
 
-Jolt is a local-first personal notes product. This glossary fixes the language used by the schema, sync protocol, UI, and tests.
+Jot is a local-first personal notes product. This glossary fixes the language used by the schema, sync protocol, UI, and tests.
 
 ## Language
 
 **Vault**:
-One user's complete Jolt data set, including notes, organization, attachments, cryptographic configuration, device records, and sync metadata.
+One user's complete Jot data set, including notes, organization, attachments, cryptographic configuration, device records, and sync metadata.
 _Avoid_: Account, workspace
 
 **Note**:
@@ -29,7 +29,7 @@ A binary object referenced by a note, including images and general files.
 _Avoid_: Asset, blob
 
 **Device**:
-One Jolt installation with its own stable ID and remote head namespace. Yjs generates document client IDs independently.
+One Jot installation with its own stable ID and remote head namespace. Yjs generates document client IDs independently.
 _Avoid_: Client, peer
 
 **Remote object**:
@@ -57,11 +57,11 @@ An editor transaction that the local durability module has written to stable sto
 _Avoid_: Keystroke, autosave event
 
 **User content**:
-The information a person entrusts to Jolt, including note text, titles, folder and tag names, CRDT payloads, attachment bytes and descriptive metadata, imports, exports, and encryption keys.
+The information a person entrusts to Jot, including note text, titles, folder and tag names, CRDT payloads, attachment bytes and descriptive metadata, imports, exports, and encryption keys.
 _Avoid_: Notes data, payload
 
 **Relay**:
-The Jolt-operated system that receives opaque Drive change notifications and wakes subscribed devices. Official clients never send it user content or Google Drive credentials, it stores neither, and sync remains correct without it.
+The Jot-operated system that receives opaque Drive change notifications and wakes subscribed devices. Official clients never send it user content or Google Drive credentials, it stores neither, and sync remains correct without it.
 _Avoid_: Sync server, Drive proxy, backend
 
 **Relay metadata**:
@@ -69,5 +69,5 @@ Opaque notification-topic identifiers, device notification endpoints, Drive chan
 _Avoid_: User content, note metadata
 
 **Locked note**:
-A note whose local content requires an explicit biometric or passphrase unlock before Jolt loads it.
+A note whose local content requires an explicit biometric or passphrase unlock before Jot loads it.
 _Avoid_: Encrypted vault
