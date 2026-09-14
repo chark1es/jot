@@ -1,14 +1,18 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { tokens } from '@jot/tokens/generated';
 import type { SemanticPalette } from '@jot/ui-mobile';
-import { editorBodySize, touchMin, uiFontFamily } from '../theme';
+import { pressedStyle, touchMin, typeSize, uiFontFamily } from '../theme';
+import { Glyph } from './Glyph';
+import { GlassSurface } from './GlassSurface';
 
 type Props = {
   readonly palette: SemanticPalette;
   readonly title: string;
   readonly leftLabel?: string;
+  readonly leftGlyph?: 'back' | 'folders';
   readonly onLeft?: () => void;
   readonly rightLabel?: string;
+  readonly rightGlyph?: 'new';
   readonly onRight?: () => void;
   readonly rightDisabled?: boolean;
 };
@@ -17,13 +21,15 @@ export function AppHeader({
   palette,
   title,
   leftLabel,
+  leftGlyph,
   onLeft,
   rightLabel,
+  rightGlyph,
   onRight,
   rightDisabled,
 }: Props) {
   return (
-    <View style={[styles.row, { borderBottomColor: palette.hairline }]}>
+    <GlassSurface palette={palette} style={[styles.row, { borderBottomColor: palette.hairline }]}>
       <View style={styles.side}>
         {leftLabel !== undefined && onLeft !== undefined ? (
           <Pressable
@@ -31,21 +37,28 @@ export function AppHeader({
             accessibilityRole="button"
             accessibilityLabel={leftLabel}
             hitSlop={tokens.spacing.scale.space8}
-            style={styles.hit}
+            style={({ pressed }) => [styles.hit, styles.hitLeading, pressedStyle(pressed)]}
           >
-            <Text style={[styles.action, { color: palette.accent, fontFamily: uiFontFamily() }]}>
-              {leftLabel}
-            </Text>
+            {leftGlyph !== undefined ? <Glyph name={leftGlyph} color={palette.accent} /> : null}
+            {leftGlyph === 'back' || leftGlyph === undefined ? (
+              <Text style={[styles.action, { color: palette.accent, fontFamily: uiFontFamily() }]}>
+                {leftLabel}
+              </Text>
+            ) : null}
           </Pressable>
         ) : null}
       </View>
-      <Text
-        style={[styles.title, { color: palette.ink, fontFamily: uiFontFamily() }]}
-        numberOfLines={1}
-        accessibilityRole="header"
-      >
-        {title}
-      </Text>
+      {title.length > 0 ? (
+        <Text
+          style={[styles.title, { color: palette.ink, fontFamily: uiFontFamily() }]}
+          numberOfLines={1}
+          accessibilityRole="header"
+        >
+          {title}
+        </Text>
+      ) : (
+        <View style={styles.title} />
+      )}
       <View style={[styles.side, styles.sideRight]}>
         {rightLabel !== undefined && onRight !== undefined ? (
           <Pressable
@@ -54,23 +67,27 @@ export function AppHeader({
             accessibilityRole="button"
             accessibilityLabel={rightLabel}
             hitSlop={tokens.spacing.scale.space8}
-            style={styles.hit}
+            style={({ pressed }) => [styles.hit, styles.hitTrailing, pressedStyle(pressed)]}
           >
-            <Text
-              style={[
-                styles.action,
-                {
-                  color: rightDisabled === true ? palette.inkFaint : palette.accent,
-                  fontFamily: uiFontFamily(),
-                },
-              ]}
-            >
-              {rightLabel}
-            </Text>
+            {rightGlyph === 'new' ? (
+              <Glyph name="new" color={rightDisabled === true ? palette.inkFaint : palette.accent} />
+            ) : (
+              <Text
+                style={[
+                  styles.action,
+                  {
+                    color: rightDisabled === true ? palette.inkFaint : palette.accent,
+                    fontFamily: uiFontFamily(),
+                  },
+                ]}
+              >
+                {rightLabel}
+              </Text>
+            )}
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </GlassSurface>
   );
 }
 
@@ -83,7 +100,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   side: {
-    width: tokens.spacing.scale.space64 + tokens.spacing.scale.space16,
+    flex: 1,
+    minWidth: touchMin,
     justifyContent: 'center',
   },
   sideRight: {
@@ -91,16 +109,26 @@ const styles = StyleSheet.create({
   },
   hit: {
     minHeight: touchMin,
-    justifyContent: 'center',
+    minWidth: touchMin,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.scale.space4,
+  },
+  hitLeading: {
+    alignSelf: 'flex-start',
+  },
+  hitTrailing: {
+    alignSelf: 'flex-end',
+    justifyContent: 'flex-end',
   },
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: editorBodySize,
+    fontSize: typeSize.title,
     fontWeight: '600',
   },
   action: {
-    fontSize: editorBodySize,
+    fontSize: typeSize.body,
     fontWeight: '500',
   },
 });

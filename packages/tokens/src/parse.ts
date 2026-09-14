@@ -170,6 +170,7 @@ export function parseTokens(jsonText: string): TokensDocument {
   expectLiteral(uiFontFamily.apple, 'SF Pro', 'type.ui.fontFamily.apple');
   expectLiteral(uiFontFamily.android, 'Roboto', 'type.ui.fontFamily.android');
   expectLiteral(uiFontFamily.windows, 'Segoe UI', 'type.ui.fontFamily.windows');
+  const uiSize = expectRecord(ui.size, 'type.ui.size');
 
   const spacing = expectRecord(root.spacing, 'spacing');
   const editorSpacing = expectRecord(spacing.editor, 'spacing.editor');
@@ -199,7 +200,23 @@ export function parseTokens(jsonText: string): TokensDocument {
 
   return {
     type: {
-      ui: { fontFamily: uiFontFamily },
+      ui: {
+        fontFamily: uiFontFamily,
+        size: {
+          largeTitle: expectLiteral(uiSize.largeTitle, 34, 'type.ui.size.largeTitle'),
+          title: expectLiteral(uiSize.title, 17, 'type.ui.size.title'),
+          body: expectLiteral(uiSize.body, 17, 'type.ui.size.body'),
+          subhead: expectLiteral(uiSize.subhead, 15, 'type.ui.size.subhead'),
+          footnote: expectLiteral(uiSize.footnote, 13, 'type.ui.size.footnote'),
+          caption: expectLiteral(uiSize.caption, 12, 'type.ui.size.caption'),
+          desktop: expectLiteral(uiSize.desktop, 13, 'type.ui.size.desktop'),
+          desktopSecondary: expectLiteral(
+            uiSize.desktopSecondary,
+            11,
+            'type.ui.size.desktopSecondary',
+          ),
+        },
+      },
       editor: {
         fontFamily: parsePlatformStrings(editor.fontFamily, 'type.editor.fontFamily'),
         body: {

@@ -1,18 +1,40 @@
 import { createExpoLocalStore } from '@jot/local-store-expo';
-import type { CommitEditInput, LocalStore, SearchQuery, SearchResult } from '@jot/local-store';
-import type { NoteCommand } from '@jot/core';
-import { parseDocument } from '@jot/schema';
+import { UNDO_HISTORY_LIMIT } from '@jot/local-store';
 import type {
+  CommitEditInput,
+  DiagnosticEntry,
+  HistoryStep,
+  LocalStore,
+  NoteHistory,
+  NoteListItem,
+  SearchQuery,
+  SearchResult,
+  VaultSnapshot as StoreSnapshot,
+  VersionSnapshot,
+} from '@jot/local-store';
+import type { NoteCommand } from '@jot/core';
+import { createId, parseDocument } from '@jot/schema';
+import type {
+  AttachmentId,
   ClockEvent,
   DeviceId,
   Document,
+  Folder,
   FolderId,
   NoteId,
+  SchemaNode,
   TagId,
   TransactionId,
 } from '@jot/schema';
 import { invertOperations } from '@jot/editor-native';
-import type { ExportFolder, ExportNote, VaultExportInput } from '@jot/import-export';
+import type { ExportAttachment, ExportFolder, ExportNote, VaultExportInput } from '@jot/import-export';
+import {
+  attachmentsDirectoryUri,
+  fileExists,
+  readFileBytes,
+  removeAttachmentFilesExcept,
+  writeAttachmentFile,
+} from './attachments';
 import { emptyDocument, plainBodyFromDocument, titleFromDocument } from './document-utils';
 import { loadDeviceClock, persistDeviceClock, type DeviceClockState } from './device';
 import {
@@ -25,70 +47,33 @@ import {
 
 export type { VaultFolder, VaultNote, VaultSnapshot, VaultTag };
 
-type NoteListItem = {
+export type CommitRequest = {
   readonly noteId: NoteId;
-  readonly title: string;
-  readonly folderId: FolderId | null;
-  readonly pinned: boolean;
-  readonly archived: boolean;
-  readonly trashed: boolean;
-  readonly createdWallMs: number;
-  readonly modifiedWallMs: number;
-  readonly manualPosition: string;
+  readonly transactionId: TransactionId;
+  readonly operations: CommitEditInput['operations'];
+  readonly crdtUpdate: Uint8Array;
+  readonly document: Document;
+  readonly baseDocument: Document;
+  readonly history?: HistoryStep;
 };
 
-type StoreFolder = {
-  readonly id: FolderId;
-  readonly name: string;
-  readonly parentPlacement: FolderId | null;
-  readonly manualPosition: string;
-  readonly created: ClockEvent;
-  readonly modified: ClockEvent;
+export type ImageAsset = {
+  readonly uri: string;
+  readonly mimeType?: string | null;
+  readonly fileName?: string | null;
+  readonly width?: number;
+  readonly height?: number;
 };
 
-type StoreTag = {
-  readonly id: TagId;
-  readonly name: string;
+export type ImportedImage = {
+  readonly attachmentId: AttachmentId;
+  readonly path: string;
 };
 
-type StoreVaultSnapshot = {
-  readonly notes: readonly {
-    readonly id: NoteId;
-    readonly title: string;
-    readonly folderId: FolderId | null;
-    readonly tags: readonly TagId[];
-    readonly pinned: boolean;
-    readonly archived: boolean;
-    readonly canonicalJson: string;
-  }[];
-  readonly folders: readonly StoreFolder[];
-  readonly tags: readonly StoreTag[];
-};
-
-/**
- * LocalStore methods the other agents are filling. Dist types may still be Phase 0.
- * Runtime calls go through this shape; missing methods throw NotImplemented.
- */
-type Phase1LocalStore = LocalStore & {
-  open(): Promise<void>;
-  createNote(input?: { readonly folderId?: FolderId | null }): Promise<NoteId>;
-  listNotes(query?: {
-    readonly trash?: 'active' | 'trashed' | 'all';
-  }): Promise<readonly NoteListItem[]>;
-  getNoteDocument(
-    noteId: NoteId,
-  ): Promise<{ readonly document: Document; readonly title: string } | null>;
-  applyNoteCommand(command: NoteCommand): Promise<void>;
-  createFolder(input: {
-    readonly name: string;
-    readonly parentPlacement?: FolderId | null;
-  }): Promise<FolderId>;
-  listFolders(): Promise<readonly StoreFolder[]>;
-  renameFolder(folderId: FolderId, name: string): Promise<void>;
-  moveFolder(folderId: FolderId, parentPlacement: FolderId | null): Promise<unknown>;
-  listTags(): Promise<readonly StoreTag[]>;
-  exportVaultSnapshot(): Promise<StoreVaultSnapshot>;
-};
+const EMPTY_HISTORY: NoteHistory = { undo: [], redo: [] };
+/** Automatic versions are checked at most this often per note while someone types. */
+const VERSION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const TITLE_LIMIT = 120;
 
 function isNotImplemented(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -125,7 +110,38 @@ function clockEvent(deviceId: DeviceId, wallMs: number, counter: number): ClockE
   return { logical: { counter, deviceId }, wallMs };
 }
 
-function fromListItem(item: NoteListItem, tagIds: readonly TagId[]): VaultNote {
+function noteTitle(document: Document): string {
+  return titleFromDocument(document, '').slice(0, TITLE_LIMIT);
+}
+
+function mimeTypeFor(name: string): string {
+  const extension = name.split('.').pop()?.toLowerCase() ?? '';
+  const known: Readonly<Record<string, string>> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    heic: 'image/heic',
+    heif: 'image/heif',
+  };
+  return known[extension] ?? 'application/octet-stream';
+}
+
+function attachmentIdsIn(node: SchemaNode, into: Set<string>): Set<string> {
+  if (node.type === 'image' || node.type === 'fileAttachment') {
+    const id = node.attrs.attachmentId;
+    if (typeof id === 'string') {
+      into.add(id);
+    }
+  }
+  for (const child of node.content) {
+    attachmentIdsIn(child, into);
+  }
+  return into;
+}
+
+function fromListItem(item: NoteListItem): VaultNote {
   return {
     id: item.noteId,
     title: item.title,
@@ -133,15 +149,15 @@ function fromListItem(item: NoteListItem, tagIds: readonly TagId[]): VaultNote {
     pinned: item.pinned,
     archived: item.archived,
     trashed: item.trashed,
-    plainBody: '',
+    plainBody: item.snippet,
     createdMs: item.createdWallMs,
     modifiedMs: item.modifiedWallMs,
     manualPosition: item.manualPosition,
-    tagIds,
+    tagIds: item.tagIds,
   };
 }
 
-function fromFolder(folder: StoreFolder): VaultFolder {
+function fromFolder(folder: Folder): VaultFolder {
   return {
     id: folder.id,
     name: folder.name,
@@ -152,16 +168,15 @@ function fromFolder(folder: StoreFolder): VaultFolder {
   };
 }
 
-function fromTag(tag: StoreTag): VaultTag {
-  return { id: tag.id, name: tag.name };
-}
-
 export class VaultSession {
+  private readonly versionChecks = new Map<string, number>();
+
   private constructor(
-    readonly store: Phase1LocalStore | null,
+    readonly store: LocalStore | null,
     readonly memory: MemoryVault,
     private clock: DeviceClockState,
     readonly usingMemoryFallback: boolean,
+    readonly attachmentsDirectory: string | null,
   ) {}
 
   static async open(): Promise<VaultSession> {
@@ -169,15 +184,12 @@ export class VaultSession {
     const memory = new MemoryVault();
     await memory.hydrate();
 
-    let store: Phase1LocalStore | null = null;
+    let store: LocalStore | null = null;
     try {
-      // Dist LocalStore types may still be Phase 0; the Expo adapter matches this shape.
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- Phase 0 dist vs Phase 1 interface
-      store = createExpoLocalStore() as Phase1LocalStore;
+      store = createExpoLocalStore();
     } catch {
       // No SQLite on this platform; `store` stays null and the file vault below still opens.
     }
-
     if (store !== null) {
       try {
         await store.open();
@@ -188,7 +200,18 @@ export class VaultSession {
       }
     }
 
-    const session = new VaultSession(store, memory, clock, store === null);
+    const session = new VaultSession(store, memory, clock, store === null, await attachmentsDirectoryUri());
+    if (store !== null) {
+      try {
+        // Trash keeps notes for 30 days. Checking at launch is enough for a local-only app.
+        const purged = await store.purgeExpiredTrash();
+        if (purged.length > 0) {
+          await session.removeOrphanAttachmentFiles();
+        }
+      } catch {
+        // The purge runs again at the next launch.
+      }
+    }
     await session.refreshFromStore();
     return session;
   }
@@ -201,13 +224,9 @@ export class VaultSession {
     return this.memory.snapshot();
   }
 
-  private async persistClock(): Promise<void> {
-    await persistDeviceClock(this.clock);
-  }
-
   private async persistMemory(): Promise<void> {
     await this.memory.persist();
-    await this.persistClock();
+    await persistDeviceClock(this.clock);
   }
 
   async refreshFromStore(): Promise<void> {
@@ -215,24 +234,14 @@ export class VaultSession {
     if (store === null) {
       return;
     }
-    const notes = await tryStore(() => store.listNotes({ trash: 'all' }));
+    const notes = await tryStore(() => store.listNotes({ trash: 'all', archived: 'any' }));
     const folders = await tryStore(() => store.listFolders());
     const tags = await tryStore(() => store.listTags());
-    if (notes.ok) {
-      const tagByNote = new Map<string, readonly TagId[]>();
-      for (const existing of this.memory.notes) {
-        tagByNote.set(existing.id, existing.tagIds);
-      }
-      this.memory.replaceFromStore({
-        notes: notes.value.map((item) => fromListItem(item, tagByNote.get(item.noteId) ?? [])),
-      });
-    }
-    if (folders.ok) {
-      this.memory.replaceFromStore({ folders: folders.value.map(fromFolder) });
-    }
-    if (tags.ok) {
-      this.memory.replaceFromStore({ tags: tags.value.map(fromTag) });
-    }
+    this.memory.replaceFromStore({
+      ...(notes.ok ? { notes: notes.value.map(fromListItem) } : {}),
+      ...(folders.ok ? { folders: folders.value.map(fromFolder) } : {}),
+      ...(tags.ok ? { tags: tags.value.map((tag) => ({ id: tag.id, name: tag.name })) } : {}),
+    });
   }
 
   async createNote(folderId: FolderId | null): Promise<NoteId> {
@@ -241,7 +250,6 @@ export class VaultSession {
       const created = await tryStore(() => store.createNote({ folderId }));
       if (created.ok) {
         await this.refreshFromStore();
-        await this.persistMemory();
         return created.value;
       }
     }
@@ -256,32 +264,18 @@ export class VaultSession {
     if (store !== null) {
       const loaded = await tryStore(() => store.getNoteDocument(noteId));
       if (loaded.ok && loaded.value !== null) {
-        this.memory.documents.set(noteId, loaded.value.document);
+        await this.restoreAttachmentFiles(noteId);
         return loaded.value.document;
       }
     }
-    return this.memory.getDocument(noteId) ?? emptyDocument();
+    return this.memory.getDocument(noteId) ?? emptyDocument(noteId);
   }
 
-  async commitEdit(input: {
-    readonly noteId: NoteId;
-    readonly transactionId: TransactionId;
-    readonly operations: CommitEditInput['operations'];
-    readonly crdtUpdate: Uint8Array;
-    readonly document: Document;
-    readonly baseDocument: Document;
-  }): Promise<void> {
+  async commitEdit(input: CommitRequest): Promise<void> {
+    const title = noteTitle(input.document);
     this.clock = this.memory.putDocument(input.noteId, input.document, this.clock);
+    this.memory.notes = this.memory.notes.map((entry) => (entry.id === input.noteId ? { ...entry, title } : entry));
     const note = this.memory.notes.find((entry) => entry.id === input.noteId);
-    const projection = {
-      noteId: input.noteId,
-      title: note?.title ?? titleFromDocument(input.document),
-      folderId: note?.folderId ?? null,
-      pinned: note?.pinned ?? false,
-      archived: note?.archived ?? false,
-      trashed: note?.trashed ?? false,
-      plainBody: note?.plainBody ?? plainBodyFromDocument(input.document),
-    };
     const inverse = invertOperations(input.baseDocument, input.operations);
     const payload: CommitEditInput = {
       transactionId: input.transactionId,
@@ -289,7 +283,15 @@ export class VaultSession {
       operations: input.operations,
       crdtUpdate: input.crdtUpdate,
       document: input.document,
-      projection,
+      projection: {
+        noteId: input.noteId,
+        title,
+        folderId: note?.folderId ?? null,
+        pinned: note?.pinned ?? false,
+        archived: note?.archived ?? false,
+        trashed: note?.trashed ?? false,
+        plainBody: plainBodyFromDocument(input.document),
+      },
       undo: {
         transactionId: input.transactionId,
         noteId: input.noteId,
@@ -300,10 +302,15 @@ export class VaultSession {
         noteId: input.noteId,
         payload: input.crdtUpdate,
       },
+      ...(input.history === undefined ? {} : { history: input.history }),
     };
-    if (this.store !== null) {
-      const store = this.store;
-      await tryStore(() => store.commitEdit(payload));
+    const store = this.store;
+    if (store !== null) {
+      const committed = await tryStore(() => store.commitEdit(payload));
+      if (committed.ok) {
+        await this.considerVersion(input.noteId);
+        return;
+      }
     }
     await this.persistMemory();
   }
@@ -315,24 +322,171 @@ export class VaultSession {
       const applied = await tryStore(() => store.applyNoteCommand(command));
       if (applied.ok) {
         await this.refreshFromStore();
+        return;
       }
     }
     await this.persistMemory();
   }
 
-  async createFolder(name: string, parentId: FolderId | null): Promise<FolderId> {
-    const trimmed = name.trim();
+  async reorderNotes(ordered: readonly NoteId[]): Promise<void> {
+    // Positions are rewritten for the whole visible list so string order always matches it.
+    const positions = new Map(ordered.map((id, index) => [id, `m${String(index).padStart(6, '0')}`]));
+    const store = this.store;
+    if (store !== null) {
+      for (const [id, position] of positions) {
+        await tryStore(() => store.reorderNote(id, position));
+      }
+    }
+    this.memory.notes = this.memory.notes.map((note) => {
+      const position = positions.get(note.id);
+      return position === undefined ? note : { ...note, manualPosition: position };
+    });
+    if (store !== null) {
+      await this.refreshFromStore();
+    } else {
+      await this.persistMemory();
+    }
+  }
+
+  async deleteNotePermanently(noteId: NoteId): Promise<void> {
+    const store = this.store;
+    if (store !== null) {
+      const removed = await tryStore(() => store.deleteNotePermanently(noteId));
+      if (removed.ok) {
+        await this.refreshFromStore();
+        await this.removeOrphanAttachmentFiles();
+        return;
+      }
+    }
+    this.memory.notes = this.memory.notes.filter((note) => note.id !== noteId);
+    this.memory.documents.delete(noteId);
+    await this.persistMemory();
+  }
+
+  async emptyTrash(): Promise<number> {
+    const trashed = this.memory.notes.filter((note) => note.trashed);
+    for (const note of trashed) {
+      await this.deleteNotePermanently(note.id);
+    }
+    return trashed.length;
+  }
+
+  async createTag(name: string): Promise<VaultTag> {
+    const trimmed = name.normalize('NFC').trim();
     if (trimmed.length === 0) {
-      throw new Error('Folder name cannot be empty.');
+      throw new Error('Tag names cannot be empty.');
+    }
+    const existing = this.memory.tags.find((tag) => tag.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase());
+    if (existing !== undefined) {
+      return existing;
     }
     const store = this.store;
     if (store !== null) {
-      const created = await tryStore(() =>
-        store.createFolder({ name: trimmed, parentPlacement: parentId }),
-      );
+      const created = await tryStore(() => store.createTag({ name: trimmed }));
       if (created.ok) {
         await this.refreshFromStore();
-        await this.persistMemory();
+        return { id: created.value, name: trimmed };
+      }
+    }
+    const tag = this.memory.ensureTag(trimmed);
+    await this.persistMemory();
+    return tag;
+  }
+
+  async setNoteTag(noteId: NoteId, tagId: TagId, attached: boolean): Promise<void> {
+    await this.applyNoteCommand({ type: 'tag', noteId, tagId, op: attached ? 'add' : 'remove' });
+  }
+
+  async listHistory(noteId: NoteId): Promise<NoteHistory> {
+    const store = this.store;
+    if (store === null) {
+      return EMPTY_HISTORY;
+    }
+    const history = await tryStore(() => store.listHistory(noteId, UNDO_HISTORY_LIMIT));
+    return history.ok ? history.value : EMPTY_HISTORY;
+  }
+
+  async listAppliedTransactionIds(noteId: NoteId): Promise<readonly TransactionId[]> {
+    const store = this.store;
+    if (store === null) {
+      return [];
+    }
+    const applied = await tryStore(() => store.listAppliedTransactionIds(noteId, 500));
+    return applied.ok ? applied.value : [];
+  }
+
+  async listVersions(noteId: NoteId): Promise<readonly VersionSnapshot[]> {
+    const store = this.store;
+    if (store === null) {
+      return [];
+    }
+    const versions = await tryStore(() => store.listVersions(noteId));
+    return versions.ok ? versions.value : [];
+  }
+
+  async saveVersion(noteId: NoteId): Promise<void> {
+    const store = this.store;
+    if (store === null) {
+      throw new Error('Versions need the local database, which did not open on this device.');
+    }
+    await store.saveVersion(noteId, { tier: 'manual' });
+  }
+
+  async versionDocument(noteId: NoteId, versionId: TransactionId): Promise<Document> {
+    const store = this.store;
+    if (store === null) {
+      throw new Error('Versions need the local database, which did not open on this device.');
+    }
+    return (await store.restoreVersion(noteId, versionId)).document;
+  }
+
+  async importImage(noteId: NoteId, asset: ImageAsset): Promise<ImportedImage> {
+    const directory = this.attachmentsDirectory;
+    if (directory === null) {
+      throw new Error('Jot could not find its attachments folder on this device.');
+    }
+    const bytes = await readFileBytes(asset.uri);
+    if (bytes.byteLength === 0) {
+      throw new Error('That image is empty.');
+    }
+    const originalName = asset.fileName ?? asset.uri.split('/').pop() ?? 'image';
+    const mimeType = asset.mimeType ?? mimeTypeFor(originalName);
+    let attachmentId = createId<AttachmentId>();
+    const store = this.store;
+    if (store !== null) {
+      const pixelSize =
+        asset.width !== undefined && asset.height !== undefined && asset.width > 0 && asset.height > 0
+          ? { pixelSize: { width: asset.width, height: asset.height } }
+          : {};
+      const imported = await tryStore(() =>
+        store.importAttachment({ bytes, mimeType, originalName, noteId, ...pixelSize }),
+      );
+      if (imported.ok) {
+        attachmentId = imported.value.id;
+      }
+    }
+    return { attachmentId, path: writeAttachmentFile(directory, attachmentId, bytes) };
+  }
+
+  async listDiagnostics(limit: number): Promise<readonly DiagnosticEntry[]> {
+    const store = this.store;
+    if (store === null) {
+      return [];
+    }
+    const entries = await tryStore(() => store.listDiagnostics(limit));
+    return entries.ok ? entries.value : [];
+  }
+
+  async createFolder(name: string, parentId: FolderId | null): Promise<FolderId> {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      throw new Error('Folder names cannot be empty.');
+    }
+    const store = this.store;
+    if (store !== null) {
+      const created = await tryStore(() => store.createFolder({ name: trimmed, parentPlacement: parentId }));
+      if (created.ok) {
+        await this.refreshFromStore();
         return created.value;
       }
     }
@@ -345,14 +499,13 @@ export class VaultSession {
   async renameFolder(folderId: FolderId, name: string): Promise<void> {
     const trimmed = name.trim();
     if (trimmed.length === 0) {
-      throw new Error('Folder name cannot be empty.');
+      throw new Error('Folder names cannot be empty.');
     }
     const store = this.store;
     if (store !== null) {
       const renamed = await tryStore(() => store.renameFolder(folderId, trimmed));
       if (renamed.ok) {
         await this.refreshFromStore();
-        await this.persistMemory();
         return;
       }
     }
@@ -366,11 +519,42 @@ export class VaultSession {
       const moved = await tryStore(() => store.moveFolder(folderId, parentId));
       if (moved.ok) {
         await this.refreshFromStore();
-        await this.persistMemory();
         return;
       }
     }
     this.clock = this.memory.moveFolder(folderId, parentId, this.clock);
+    await this.persistMemory();
+  }
+
+  /** Trashes a folder and its subfolders. Their notes move to No folder instead of disappearing. */
+  async deleteFolder(folderId: FolderId): Promise<void> {
+    const doomed = new Set<string>([folderId]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const folder of this.memory.folders) {
+        if (folder.parentId !== null && doomed.has(folder.parentId) && !doomed.has(folder.id)) {
+          doomed.add(folder.id);
+          grew = true;
+        }
+      }
+    }
+    for (const note of this.memory.notes.filter((entry) => entry.folderId !== null && doomed.has(entry.folderId))) {
+      await this.applyNoteCommand({ type: 'move', noteId: note.id, folderId: null });
+    }
+    const store = this.store;
+    if (store !== null) {
+      let trashed = true;
+      for (const id of doomed) {
+        const result = await tryStore(() => store.trashFolder(id as FolderId));
+        trashed = trashed && result.ok;
+      }
+      if (trashed) {
+        await this.refreshFromStore();
+        return;
+      }
+    }
+    this.memory.folders = this.memory.folders.filter((folder) => !doomed.has(folder.id));
     await this.persistMemory();
   }
 
@@ -408,34 +592,49 @@ export class VaultSession {
     if (store !== null) {
       const snapshot = await tryStore(() => store.exportVaultSnapshot());
       if (snapshot.ok) {
-        const notes: ExportNote[] = snapshot.value.notes.map((note, index) => {
-          const created = clockEvent(this.clock.deviceId, Date.now(), index + 1);
-          return {
-            id: note.id,
-            title: note.title,
-            document: parseCanonical(note.canonicalJson),
-            folderPlacement: note.folderId,
-            tags: note.tags.map((tagId) => {
-              const tag = snapshot.value.tags.find((entry) => entry.id === tagId);
-              return { id: tagId, name: tag?.name ?? tagId };
-            }),
-            pinned: note.pinned,
-            archived: note.archived,
-            created,
-            modified: created,
-            attachments: [],
-          };
-        });
-        const folders: ExportFolder[] = snapshot.value.folders.map((folder) => ({
-          id: folder.id,
-          name: folder.name,
-          parentPlacement: folder.parentPlacement,
-          manualPosition: folder.manualPosition,
-        }));
-        return { notes, folders };
+        return this.storeSnapshotToExport(snapshot.value);
       }
     }
     return this.memoryToExportInput();
+  }
+
+  private storeSnapshotToExport(snapshot: StoreSnapshot): VaultExportInput {
+    const attachments = new Map(snapshot.attachments.map((record) => [record.id, record]));
+    const listed = new Map(this.memory.notes.map((note) => [note.id, note]));
+    const now = Date.now();
+    const notes: ExportNote[] = snapshot.notes.map((note, index) => {
+      const document = parseCanonical(note.canonicalJson);
+      const summary = listed.get(note.id);
+      const noteAttachments: ExportAttachment[] = [...attachmentIdsIn(document, new Set())].flatMap((id) => {
+        const record = attachments.get(id as AttachmentId);
+        if (record?.bytes === null || record?.bytes === undefined) {
+          return [];
+        }
+        return [{ id: record.id, originalName: record.originalName, mimeType: record.mimeType, bytes: record.bytes }];
+      });
+      return {
+        id: note.id,
+        title: note.title.trim() === '' ? 'New note' : note.title,
+        document,
+        folderPlacement: note.folderId,
+        tags: note.tags.map((tagId) => {
+          const tag = snapshot.tags.find((entry) => entry.id === tagId);
+          return { id: tagId, name: tag?.name ?? tagId };
+        }),
+        pinned: note.pinned,
+        archived: note.archived,
+        created: clockEvent(snapshot.deviceId, summary?.createdMs ?? now, index + 1),
+        modified: clockEvent(snapshot.deviceId, summary?.modifiedMs ?? now, index + 1),
+        attachments: noteAttachments,
+      };
+    });
+    const folders: ExportFolder[] = snapshot.folders.map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      parentPlacement: folder.parentPlacement,
+      manualPosition: folder.manualPosition,
+    }));
+    return { notes, folders };
   }
 
   private memoryToExportInput(): VaultExportInput {
@@ -445,8 +644,8 @@ export class VaultSession {
       const modified = clockEvent(this.clock.deviceId, note.modifiedMs, index + 1);
       return {
         id: note.id,
-        title: note.title.trim() === '' ? 'Untitled' : note.title,
-        document: snapshot.documents[note.id] ?? emptyDocument(),
+        title: note.title.trim() === '' ? 'New note' : note.title,
+        document: snapshot.documents[note.id] ?? emptyDocument(note.id),
         folderPlacement: note.folderId,
         tags: note.tagIds.map((tagId) => {
           const tag = snapshot.tags.find((entry) => entry.id === tagId);
@@ -468,7 +667,51 @@ export class VaultSession {
     return { notes, folders };
   }
 
-  ensureTag(name: string): VaultTag {
-    return this.memory.ensureTag(name);
+  private async considerVersion(noteId: NoteId): Promise<void> {
+    const store = this.store;
+    const now = Date.now();
+    if (store === null || now - (this.versionChecks.get(noteId) ?? 0) < VERSION_CHECK_INTERVAL_MS) {
+      return;
+    }
+    this.versionChecks.set(noteId, now);
+    try {
+      await store.considerAutomaticVersion(noteId);
+    } catch {
+      // A missed automatic version is retried on the next check.
+    }
+  }
+
+  /** Rewrites attachment files from SQLite when the files are gone, such as after a restore. */
+  private async restoreAttachmentFiles(noteId: NoteId): Promise<void> {
+    const store = this.store;
+    const directory = this.attachmentsDirectory;
+    if (store === null || directory === null) {
+      return;
+    }
+    const records = await tryStore(() => store.listAttachments(noteId));
+    if (!records.ok) {
+      return;
+    }
+    for (const record of records.value) {
+      if (await fileExists(`${directory}${record.id}`)) {
+        continue;
+      }
+      const bytes = await store.getAttachmentBytes(record.id);
+      if (bytes !== null) {
+        writeAttachmentFile(directory, record.id, bytes);
+      }
+    }
+  }
+
+  private async removeOrphanAttachmentFiles(): Promise<void> {
+    const store = this.store;
+    const directory = this.attachmentsDirectory;
+    if (store === null || directory === null) {
+      return;
+    }
+    const records = await tryStore(() => store.listAttachments());
+    if (records.ok) {
+      await removeAttachmentFilesExcept(directory, new Set(records.value.map((record) => record.id)));
+    }
   }
 }

@@ -23,7 +23,10 @@ type ExpoDatabase = {
 };
 
 type ExpoSqliteModule = {
-  openDatabaseSync: (databaseName: string) => ExpoDatabase;
+  openDatabaseSync: (
+    databaseName: string,
+    options?: { readonly finalizeUnusedStatementsBeforeClosing?: boolean },
+  ) => ExpoDatabase;
 };
 
 /**
@@ -47,7 +50,10 @@ function tryExpoDriver(databaseName: string): SqliteDriver | null {
     if (loaded === null) {
       return null;
     }
-    return adaptExpo(loaded.openDatabaseSync(databaseName));
+    // Closing finalizes every statement on the connection by default, including the ones FTS5
+    // owns. FTS5 then finalizes them again while disconnecting, which crashed on JS reload.
+    // The sync calls used here finalize their own statements, so nothing is left to clean up.
+    return adaptExpo(loaded.openDatabaseSync(databaseName, { finalizeUnusedStatementsBeforeClosing: false }));
   } catch {
     return null;
   }
@@ -127,19 +133,93 @@ function loadExpoSqlite(): ExpoSqliteModule | null {
   }
 }
 
+function describeValue(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (value instanceof Uint8Array) {
+    return `${value.constructor.name}(${String(value.byteLength)})`;
+  }
+  return typeof value;
+}
+
+/**
+ * Native SQLite errors do not say which statement failed. This adds the statement and the
+ * types of its parameters, never their values, because parameters can hold note text.
+ */
+function withStatement<T>(sql: string, params: readonly SqlValue[], run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    const statement = sql.replace(/\s+/g, ' ').trim().slice(0, 80);
+    const types = params.map(describeValue).join(', ');
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`SQLite failed on "${statement}" with [${types}]: ${message}`, { cause: error });
+  }
+}
+
+/**
+ * expo-sqlite cannot bind a zero-length Uint8Array: the native call fails to downcast it.
+ * Empty blobs are written into the statement as `zeroblob(0)` instead of passed as parameters.
+ */
+export function inlineEmptyBlobs(
+  sql: string,
+  params: readonly SqlValue[],
+): { readonly sql: string; readonly params: SqlValue[] } {
+  if (!params.some((value) => value instanceof Uint8Array && value.byteLength === 0)) {
+    return { sql, params: [...params] };
+  }
+  let index = 0;
+  let quote: string | null = null;
+  let statement = '';
+  const kept: SqlValue[] = [];
+  for (const char of sql) {
+    if (quote !== null) {
+      statement += char;
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      statement += char;
+      continue;
+    }
+    if (char === '?') {
+      const value = params[index];
+      index += 1;
+      if (value instanceof Uint8Array && value.byteLength === 0) {
+        statement += 'zeroblob(0)';
+        continue;
+      }
+      if (value !== undefined) {
+        kept.push(value);
+      }
+    }
+    statement += char;
+  }
+  return { sql: statement, params: kept };
+}
+
 function adaptExpo(db: ExpoDatabase): SqliteDriver {
   return {
     exec(sql: string): void {
-      db.execSync(sql);
+      withStatement(sql, [], () => {
+        db.execSync(sql);
+      });
     },
     run(sql: string, params: readonly SqlValue[] = []): void {
-      db.runSync(sql, [...params]);
+      const bound = inlineEmptyBlobs(sql, params);
+      withStatement(sql, params, () => db.runSync(bound.sql, bound.params));
     },
     all(sql: string, params: readonly SqlValue[] = []): SqlRow[] {
-      return db.getAllSync(sql, [...params]).map(asSqlRow);
+      const bound = inlineEmptyBlobs(sql, params);
+      return withStatement(sql, params, () => db.getAllSync(bound.sql, bound.params).map(asSqlRow));
     },
     get(sql: string, params: readonly SqlValue[] = []): SqlRow | undefined {
-      const row = db.getFirstSync(sql, [...params]);
+      const bound = inlineEmptyBlobs(sql, params);
+      const row = withStatement(sql, params, () => db.getFirstSync(bound.sql, bound.params));
       if (row === null || row === undefined) {
         return undefined;
       }

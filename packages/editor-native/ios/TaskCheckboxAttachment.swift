@@ -1,4 +1,24 @@
+import ImageIO
 import UIKit
+
+enum EditorTheme {
+  static var accent: UIColor = .systemBlue
+}
+
+extension UIColor {
+  /// `#rrggbb` from React Native props. Anything else is nil.
+  convenience init?(jotHex value: String?) {
+    guard let value else { return nil }
+    let hex = value.hasPrefix("#") ? String(value.dropFirst()) : value
+    guard hex.count == 6, let number = UInt32(hex, radix: 16) else { return nil }
+    self.init(
+      red: CGFloat((number >> 16) & 0xff) / 255,
+      green: CGFloat((number >> 8) & 0xff) / 255,
+      blue: CGFloat(number & 0xff) / 255,
+      alpha: 1
+    )
+  }
+}
 
 final class TaskCheckboxAttachment: NSTextAttachment {
   var nodeId: String
@@ -8,7 +28,7 @@ final class TaskCheckboxAttachment: NSTextAttachment {
     self.nodeId = nodeId
     self.checked = checked
     super.init(data: nil, ofType: "public.jot-task-checkbox")
-    bounds = CGRect(x: 0, y: -4, width: 22, height: 22)
+    bounds = CGRect(x: 0, y: -5, width: 22, height: 22)
     image = Self.symbol(checked: checked)
   }
 
@@ -18,45 +38,76 @@ final class TaskCheckboxAttachment: NSTextAttachment {
     super.init(coder: coder)
   }
 
-  override func viewProvider(
-    for parentView: UIView?,
-    location: any NSTextLocation,
-    textContainer: NSTextContainer?
-  ) -> NSTextAttachmentViewProvider? {
-    let provider = TaskCheckboxViewProvider(
-      textAttachment: self,
-      parentView: parentView,
-      textLayoutManager: textContainer?.textLayoutManager,
-      location: location
-    )
-    provider.tracksTextAttachmentViewBounds = true
-    return provider
+  override var accessibilityLabel: String? {
+    get { checked == 1 ? "Completed task" : "Task" }
+    set {}
   }
 
   static func symbol(checked: Int) -> UIImage? {
-    let name = checked == 1 ? "checkmark.square.fill" : "square"
-    let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
-    return UIImage(systemName: name, withConfiguration: config)?.withTintColor(.label, renderingMode: .alwaysOriginal)
+    let config = UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)
+    if checked == 1 {
+      return UIImage(systemName: "checkmark.circle.fill", withConfiguration: config)?
+        .withTintColor(EditorTheme.accent, renderingMode: .alwaysOriginal)
+    }
+    return UIImage(systemName: "circle", withConfiguration: config)?
+      .withTintColor(.tertiaryLabel, renderingMode: .alwaysOriginal)
   }
 }
 
-final class TaskCheckboxViewProvider: NSTextAttachmentViewProvider {
-  override func loadView() {
-    let button = UIButton(type: .system)
-    button.frame = CGRect(x: 0, y: 0, width: 28, height: 28)
-    if let attachment = textAttachment as? TaskCheckboxAttachment {
-      button.setImage(TaskCheckboxAttachment.symbol(checked: attachment.checked), for: .normal)
-      button.accessibilityLabel = "Task"
-      button.accessibilityValue = attachment.checked == 1 ? "checked" : "unchecked"
-      var traits: UIAccessibilityTraits = [.button]
-      if attachment.checked == 1 {
-        traits.insert(.selected)
-      }
-      button.accessibilityTraits = traits
-      button.accessibilityHint = "Toggle checklist item"
-      button.tag = 0
+/// A bullet or number drawn as the first character of a list item. TextKit draws
+/// `NSTextList` markers only for paragraphs that contain text, so an empty item had none.
+final class ListMarkerAttachment: NSTextAttachment {
+  static let minimumWidth: CGFloat = 22
+  static let gap: CGFloat = 6
+
+  private static let cache: NSCache<NSString, UIImage> = {
+    let cache = NSCache<NSString, UIImage>()
+    cache.countLimit = 128
+    return cache
+  }()
+
+  let label: String
+
+  init(label: String, font: UIFont) {
+    self.label = label
+    super.init(data: nil, ofType: "public.jot-list-marker")
+    let rendered = Self.image(label: label, font: font)
+    image = rendered
+    bounds = CGRect(x: 0, y: font.descender, width: rendered.size.width, height: rendered.size.height)
+  }
+
+  required init?(coder: NSCoder) {
+    label = ""
+    super.init(coder: coder)
+  }
+
+  override var accessibilityLabel: String? {
+    get { nil }
+    set {}
+  }
+
+  static func width(label: String, font: UIFont) -> CGFloat {
+    let measured = ceil((label as NSString).size(withAttributes: [.font: font]).width)
+    return max(minimumWidth, measured)
+  }
+
+  private static func image(label: String, font: UIFont) -> UIImage {
+    let traits = UITraitCollection.current
+    let key = "\(label)|\(font.fontName)|\(font.pointSize)|\(traits.userInterfaceStyle.rawValue)" as NSString
+    if let hit = cache.object(forKey: key) {
+      return hit
     }
-    view = button
+    let size = CGSize(width: width(label: label, font: font), height: ceil(font.lineHeight))
+    let rendered = UIGraphicsImageRenderer(size: size).image { _ in
+      let paragraph = NSMutableParagraphStyle()
+      paragraph.alignment = .right
+      (label as NSString).draw(
+        in: CGRect(origin: .zero, size: size),
+        withAttributes: [.font: font, .foregroundColor: UIColor.label, .paragraphStyle: paragraph]
+      )
+    }
+    cache.setObject(rendered, forKey: key)
+    return rendered
   }
 }
 
@@ -100,7 +151,7 @@ final class QuoteHairlineAttachment: NSTextAttachment {
   init(depth: Int) {
     self.depth = depth
     super.init(data: nil, ofType: "public.jot-quote-hairline")
-    bounds = CGRect(x: 0, y: -6, width: 8, height: 22)
+    bounds = CGRect(x: 0, y: -5, width: 3, height: 22)
     image = Self.image()
   }
 
@@ -115,10 +166,10 @@ final class QuoteHairlineAttachment: NSTextAttachment {
   }
 
   private static func image() -> UIImage {
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 22))
-    return renderer.image { context in
-      UIColor.separator.setFill()
-      context.fill(CGRect(x: 1, y: 0, width: 2, height: 22))
+    let size = CGSize(width: 3, height: 22)
+    return UIGraphicsImageRenderer(size: size).image { _ in
+      UIColor.tertiaryLabel.setFill()
+      UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 1.5).fill()
     }
   }
 }
@@ -127,7 +178,7 @@ final class HorizontalRuleAttachment: NSTextAttachment {
   init(width: CGFloat) {
     super.init(data: nil, ofType: "public.jot-horizontal-rule")
     let w = max(width, 40)
-    bounds = CGRect(x: 0, y: -2, width: w, height: 12)
+    bounds = CGRect(x: 0, y: -2, width: w, height: 14)
     image = Self.image(width: w)
   }
 
@@ -136,7 +187,7 @@ final class HorizontalRuleAttachment: NSTextAttachment {
   }
 
   override var accessibilityLabel: String? {
-    get { "divider" }
+    get { "Divider" }
     set {}
   }
 
@@ -146,42 +197,56 @@ final class HorizontalRuleAttachment: NSTextAttachment {
   }
 
   private static func image(width: CGFloat) -> UIImage {
-    let size = CGSize(width: width, height: 12)
-    let renderer = UIGraphicsImageRenderer(size: size)
-    return renderer.image { context in
+    let size = CGSize(width: width, height: 14)
+    return UIGraphicsImageRenderer(size: size).image { context in
       UIColor.separator.setFill()
-      context.fill(CGRect(x: 0, y: 5, width: width, height: 1))
+      context.fill(CGRect(x: 0, y: 7, width: width, height: 1 / max(UITraitCollection.current.displayScale, 1)))
     }
   }
 }
 
 final class ImageBlockAttachment: NSTextAttachment {
-  let alt: String
-  let path: String?
+  static let cornerRadius: CGFloat = 10
 
-  init(alt: String, path: String?, widthBasisPoints: Int, containerWidth: CGFloat) {
+  let nodeId: String
+  let attachmentId: String
+  let alt: String
+  let widthBasisPoints: Int
+
+  init(
+    nodeId: String,
+    attachmentId: String,
+    alt: String,
+    fileURL: URL?,
+    widthBasisPoints: Int,
+    containerWidth: CGFloat
+  ) {
+    self.nodeId = nodeId
+    self.attachmentId = attachmentId
     self.alt = alt
-    self.path = path
+    self.widthBasisPoints = min(max(widthBasisPoints, 1), 10000)
     super.init(data: nil, ofType: "public.jot-image")
-    let width = max(containerWidth, 40) * CGFloat(min(max(widthBasisPoints, 1), 10000)) / 10000
-    if let path, let loaded = UIImage(contentsOfFile: path) {
-      image = loaded
-      let height = loaded.size.width > 0 ? loaded.size.height / loaded.size.width * width : 80
-      bounds = CGRect(x: 0, y: 0, width: width, height: height)
+    let width = floor(max(containerWidth, 40) * CGFloat(self.widthBasisPoints) / 10000)
+    if let fileURL, let rendered = ImageRenderCache.image(fileURL: fileURL, width: width) {
+      image = rendered
+      bounds = CGRect(origin: .zero, size: rendered.size)
     } else {
-      image = Self.placeholder(width: width)
-      bounds = CGRect(x: 0, y: 0, width: width, height: max(80, width * 0.4))
+      let size = CGSize(width: width, height: max(80, floor(width * 0.56)))
+      image = Self.placeholder(size: size)
+      bounds = CGRect(origin: .zero, size: size)
     }
   }
 
   required init?(coder: NSCoder) {
+    nodeId = ""
+    attachmentId = ""
     alt = ""
-    path = nil
+    widthBasisPoints = 10000
     super.init(coder: coder)
   }
 
   override var accessibilityLabel: String? {
-    get { alt.isEmpty ? "image" : alt }
+    get { alt.isEmpty ? "Image" : alt }
     set {}
   }
 
@@ -190,17 +255,64 @@ final class ImageBlockAttachment: NSTextAttachment {
     set {}
   }
 
-  private static func placeholder(width: CGFloat) -> UIImage {
-    let height = max(80, width * 0.4)
-    let size = CGSize(width: width, height: height)
-    let renderer = UIGraphicsImageRenderer(size: size)
-    return renderer.image { context in
+  private static func placeholder(size: CGSize) -> UIImage {
+    UIGraphicsImageRenderer(size: size).image { _ in
       UIColor.secondarySystemFill.setFill()
-      context.fill(CGRect(origin: .zero, size: size))
-      let symbol = UIImage(systemName: "photo")?.withTintColor(.secondaryLabel, renderingMode: .alwaysOriginal)
-      let symbolSize = CGSize(width: 28, height: 24)
-      let origin = CGPoint(x: (width - symbolSize.width) / 2, y: (height - symbolSize.height) / 2)
-      symbol?.draw(in: CGRect(origin: origin, size: symbolSize))
+      UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: cornerRadius).fill()
+      let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)
+      if let symbol = UIImage(systemName: "photo", withConfiguration: config)?
+        .withTintColor(.tertiaryLabel, renderingMode: .alwaysOriginal) {
+        let origin = CGPoint(x: (size.width - symbol.size.width) / 2, y: (size.height - symbol.size.height) / 2)
+        symbol.draw(at: origin)
+      }
     }
+  }
+}
+
+/// Decodes attachments at display size. A 12 MP photo decoded at full size costs about 48 MB,
+/// so the editor never asks ImageIO for more pixels than the screen shows.
+enum ImageRenderCache {
+  private static let cache: NSCache<NSString, UIImage> = {
+    let cache = NSCache<NSString, UIImage>()
+    cache.countLimit = 64
+    return cache
+  }()
+
+  static func image(fileURL: URL, width: CGFloat) -> UIImage? {
+    guard width > 1 else { return nil }
+    let key = "\(fileURL.path)|\(Int(width))" as NSString
+    if let hit = cache.object(forKey: key) {
+      return hit
+    }
+    guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+          let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+          let pixelWidth = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+          let pixelHeight = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
+          pixelWidth > 0, pixelHeight > 0 else {
+      return nil
+    }
+    let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    // EXIF orientations 5 through 8 swap width and height.
+    let aspect = orientation >= 5 ? pixelWidth / pixelHeight : pixelHeight / pixelWidth
+    let size = CGSize(width: width, height: floor(width * CGFloat(aspect)))
+    let scale = max(UITraitCollection.current.displayScale, 1)
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceShouldCacheImmediately: true,
+      kCGImageSourceThumbnailMaxPixelSize: max(size.width, size.height) * scale
+    ]
+    guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+      return nil
+    }
+    let decoded = UIImage(cgImage: thumbnail)
+    let format = UIGraphicsImageRendererFormat.preferred()
+    format.scale = scale
+    let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+      UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: ImageBlockAttachment.cornerRadius).addClip()
+      decoded.draw(in: CGRect(origin: .zero, size: size))
+    }
+    cache.setObject(rendered, forKey: key)
+    return rendered
   }
 }

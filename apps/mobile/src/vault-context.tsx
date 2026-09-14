@@ -9,11 +9,24 @@ import {
   type ReactNode,
 } from 'react';
 import type { NoteCommand } from '@jot/core';
-import type { SearchQuery, SearchResult } from '@jot/local-store';
+import type {
+  DiagnosticEntry,
+  NoteHistory,
+  SearchQuery,
+  SearchResult,
+  VersionSnapshot,
+} from '@jot/local-store';
 import type { VaultExportInput } from '@jot/import-export';
-import type { Document, FolderId, NoteId, TransactionId } from '@jot/schema';
-import type { CommitEditInput } from '@jot/local-store';
-import { VaultSession, type VaultFolder, type VaultNote, type VaultTag } from './vault';
+import type { Document, FolderId, NoteId, TagId, TransactionId } from '@jot/schema';
+import {
+  VaultSession,
+  type CommitRequest,
+  type ImageAsset,
+  type ImportedImage,
+  type VaultFolder,
+  type VaultNote,
+  type VaultTag,
+} from './vault';
 
 export type VaultStatus = 'loading' | 'ready' | 'error';
 
@@ -25,25 +38,32 @@ type VaultContextValue = {
   readonly folders: readonly VaultFolder[];
   readonly tags: readonly VaultTag[];
   readonly usingMemoryFallback: boolean;
+  /** `file://` URI of the folder holding attachment files, once notes are open. */
+  readonly attachmentsDirectory: string | null;
   readonly retry: () => void;
+  readonly refresh: () => Promise<void>;
   readonly createNote: (folderId: FolderId | null) => Promise<NoteId>;
   readonly getDocument: (noteId: NoteId) => Promise<Document>;
-  readonly commitEdit: (input: {
-    readonly noteId: NoteId;
-    readonly transactionId: TransactionId;
-    readonly operations: CommitEditInput['operations'];
-    readonly crdtUpdate: Uint8Array;
-    readonly document: Document;
-    readonly baseDocument: Document;
-  }) => Promise<void>;
+  readonly commitEdit: (input: CommitRequest) => Promise<void>;
   readonly applyNoteCommand: (command: NoteCommand) => Promise<void>;
+  readonly reorderNotes: (ordered: readonly NoteId[]) => Promise<void>;
+  readonly deleteNotePermanently: (noteId: NoteId) => Promise<void>;
+  readonly emptyTrash: () => Promise<number>;
+  readonly createTag: (name: string) => Promise<VaultTag>;
+  readonly setNoteTag: (noteId: NoteId, tagId: TagId, attached: boolean) => Promise<void>;
+  readonly listHistory: (noteId: NoteId) => Promise<NoteHistory>;
+  readonly listAppliedTransactionIds: (noteId: NoteId) => Promise<readonly TransactionId[]>;
+  readonly listVersions: (noteId: NoteId) => Promise<readonly VersionSnapshot[]>;
+  readonly saveVersion: (noteId: NoteId) => Promise<void>;
+  readonly versionDocument: (noteId: NoteId, versionId: TransactionId) => Promise<Document>;
+  readonly importImage: (noteId: NoteId, asset: ImageAsset) => Promise<ImportedImage>;
   readonly createFolder: (name: string, parentId: FolderId | null) => Promise<FolderId>;
   readonly renameFolder: (folderId: FolderId, name: string) => Promise<void>;
   readonly moveFolder: (folderId: FolderId, parentId: FolderId | null) => Promise<void>;
+  readonly deleteFolder: (folderId: FolderId) => Promise<void>;
   readonly search: (query: SearchQuery) => Promise<SearchResult>;
   readonly exportForShare: () => Promise<VaultExportInput>;
-  readonly ensureTag: (name: string) => VaultTag;
-  readonly refresh: () => Promise<void>;
+  readonly listDiagnostics: (limit: number) => Promise<readonly DiagnosticEntry[]>;
 };
 
 const VaultContext = createContext<VaultContextValue | null>(null);
@@ -52,7 +72,7 @@ function errorText(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) {
     return error.message;
   }
-  return 'Jot could not open local notes. Try again.';
+  return 'Jot could not open notes on this device. Try again.';
 }
 
 export function VaultProvider({ children }: { readonly children: ReactNode }) {
@@ -64,6 +84,7 @@ export function VaultProvider({ children }: { readonly children: ReactNode }) {
   const [tags, setTags] = useState<readonly VaultTag[]>([]);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [usingMemoryFallback, setUsingMemoryFallback] = useState(true);
+  const [attachmentsDirectory, setAttachmentsDirectory] = useState<string | null>(null);
 
   const sync = useCallback((session: VaultSession) => {
     const snapshot = session.snapshot();
@@ -72,6 +93,7 @@ export function VaultProvider({ children }: { readonly children: ReactNode }) {
     setTags(snapshot.tags);
     setDeviceId(session.deviceId);
     setUsingMemoryFallback(session.usingMemoryFallback);
+    setAttachmentsDirectory(session.attachmentsDirectory);
   }, []);
 
   const boot = useCallback(() => {
@@ -95,15 +117,23 @@ export function VaultProvider({ children }: { readonly children: ReactNode }) {
     boot();
   }, [boot]);
 
-  const requireSession = useCallback((): VaultSession => {
-    const session = sessionRef.current;
-    if (session === null) {
-      throw new Error('Local notes are not open yet.');
-    }
-    return session;
-  }, []);
-
   const value = useMemo<VaultContextValue>(() => {
+    const requireSession = (): VaultSession => {
+      const session = sessionRef.current;
+      if (session === null) {
+        throw new Error('Notes are still opening.');
+      }
+      return session;
+    };
+    /** Runs a vault change and publishes the updated lists, even when the change fails. */
+    const mutate = async <T,>(run: (session: VaultSession) => Promise<T>): Promise<T> => {
+      const session = requireSession();
+      try {
+        return await run(session);
+      } finally {
+        sync(session);
+      }
+    };
     return {
       status,
       errorMessage,
@@ -112,58 +142,33 @@ export function VaultProvider({ children }: { readonly children: ReactNode }) {
       folders,
       tags,
       usingMemoryFallback,
+      attachmentsDirectory,
       retry: boot,
-      createNote: async (folderId) => {
-        const id = await requireSession().createNote(folderId);
-        sync(requireSession());
-        return id;
-      },
+      refresh: () => mutate((session) => session.refreshFromStore()),
+      createNote: (folderId) => mutate((session) => session.createNote(folderId)),
       getDocument: (noteId) => requireSession().getDocument(noteId),
-      commitEdit: async (input) => {
-        await requireSession().commitEdit(input);
-        sync(requireSession());
-      },
-      applyNoteCommand: async (command) => {
-        await requireSession().applyNoteCommand(command);
-        sync(requireSession());
-      },
-      createFolder: async (name, parentId) => {
-        const id = await requireSession().createFolder(name, parentId);
-        sync(requireSession());
-        return id;
-      },
-      renameFolder: async (folderId, name) => {
-        await requireSession().renameFolder(folderId, name);
-        sync(requireSession());
-      },
-      moveFolder: async (folderId, parentId) => {
-        await requireSession().moveFolder(folderId, parentId);
-        sync(requireSession());
-      },
+      commitEdit: (input) => mutate((session) => session.commitEdit(input)),
+      applyNoteCommand: (command) => mutate((session) => session.applyNoteCommand(command)),
+      reorderNotes: (ordered) => mutate((session) => session.reorderNotes(ordered)),
+      deleteNotePermanently: (noteId) => mutate((session) => session.deleteNotePermanently(noteId)),
+      emptyTrash: () => mutate((session) => session.emptyTrash()),
+      createTag: (name) => mutate((session) => session.createTag(name)),
+      setNoteTag: (noteId, tagId, attached) => mutate((session) => session.setNoteTag(noteId, tagId, attached)),
+      listHistory: (noteId) => requireSession().listHistory(noteId),
+      listAppliedTransactionIds: (noteId) => requireSession().listAppliedTransactionIds(noteId),
+      listVersions: (noteId) => requireSession().listVersions(noteId),
+      saveVersion: (noteId) => requireSession().saveVersion(noteId),
+      versionDocument: (noteId, versionId) => requireSession().versionDocument(noteId, versionId),
+      importImage: (noteId, asset) => requireSession().importImage(noteId, asset),
+      createFolder: (name, parentId) => mutate((session) => session.createFolder(name, parentId)),
+      renameFolder: (folderId, name) => mutate((session) => session.renameFolder(folderId, name)),
+      moveFolder: (folderId, parentId) => mutate((session) => session.moveFolder(folderId, parentId)),
+      deleteFolder: (folderId) => mutate((session) => session.deleteFolder(folderId)),
       search: (query) => requireSession().search(query),
       exportForShare: () => requireSession().exportForShare(),
-      ensureTag: (name) => {
-        const tag = requireSession().ensureTag(name);
-        sync(requireSession());
-        return tag;
-      },
-      refresh: async () => {
-        await requireSession().refreshFromStore();
-        sync(requireSession());
-      },
+      listDiagnostics: (limit) => requireSession().listDiagnostics(limit),
     };
-  }, [
-    boot,
-    deviceId,
-    errorMessage,
-    folders,
-    notes,
-    requireSession,
-    status,
-    sync,
-    tags,
-    usingMemoryFallback,
-  ]);
+  }, [attachmentsDirectory, boot, deviceId, errorMessage, folders, notes, status, sync, tags, usingMemoryFallback]);
 
   return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>;
 }

@@ -9,7 +9,7 @@ export default function Layout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <VaultProvider>
-          <Stack screenOptions={{ headerShown: false, animation: 'none' }} />
+          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
         </VaultProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

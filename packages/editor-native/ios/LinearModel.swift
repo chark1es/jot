@@ -129,6 +129,19 @@ enum LinearModel {
     return LinearDocument(id: doc.id, blocks: blocks)
   }
 
+  /// Same derivation as `emptyDocument` and `apply-operations` in TypeScript, so the first
+  /// keystroke in an empty note targets an id every layer agrees on.
+  static func bodyParagraphId(_ docId: String) -> String {
+    JotIds.derive(parentId: docId, purpose: "paragraph", index: 0)
+  }
+
+  static func withEditableBody(_ linear: LinearDocument) -> LinearDocument {
+    guard linear.blocks.isEmpty else { return linear }
+    var next = linear
+    next.blocks = [LinearBlock(id: bodyParagraphId(linear.id), kind: .paragraph, indent: 0, runs: [])]
+    return next
+  }
+
   static func linearToDocument(_ linear: LinearDocument) -> SchemaNode {
     let content = nestBlocks(linear.blocks, from: 0, minIndent: 0).nodes
     return SchemaNode(type: "doc", id: linear.id, attrs: [:], content: content, text: nil, marks: [])
@@ -188,8 +201,9 @@ enum LinearModel {
     kind == .horizontalRule || kind == .image || kind == .placeholder
   }
 
+  /// Characters drawn before a block's text: a quote bar, then a bullet, number, or checkbox.
   static func leadingCount(_ block: LinearBlock) -> Int {
-    (block.kind == .taskItem ? 1 : 0) + (block.quoteChain.isEmpty ? 0 : 1)
+    (isListKind(block.kind) ? 1 : 0) + (block.quoteChain.isEmpty ? 0 : 1)
   }
 
   static func parentLocation(nodeId: String, in tree: SchemaNode) -> (parentId: String, index: Int)? {
@@ -654,9 +668,10 @@ enum LinearModel {
     in linear: inout LinearDocument
   ) {
     if linear.blocks.isEmpty {
+      let targetsRoot = position.nodeId.isEmpty || position.nodeId == linear.id
       linear.blocks.append(
         LinearBlock(
-          id: position.nodeId.isEmpty ? JotIds.create() : position.nodeId,
+          id: targetsRoot ? bodyParagraphId(linear.id) : position.nodeId,
           kind: .paragraph,
           indent: 0,
           runs: [LinearRun(text: text, marks: marks, id: JotIds.create())]
@@ -849,6 +864,229 @@ enum LinearModel {
     if let languageId = patch["languageId"]?.stringValue() {
       linear.blocks[index].languageId = languageId
     }
+    if linear.blocks[index].kind == .image, let json = linear.blocks[index].placeholderJSON {
+      var node = SchemaNode.parse(json)
+      for key in ["widthBasisPoints", "alt"] {
+        if let value = patch[key] {
+          node.attrs[key] = value
+        }
+      }
+      let updated = node.toJSON()
+      linear.blocks[index].placeholderJSON = updated
+      linear.blocks[index].runs = [
+        LinearRun(
+          text: objectReplacement,
+          id: node.id,
+          placeholderJSON: updated,
+          fallbackText: node.attrs["alt"]?.stringValue() ?? ""
+        )
+      ]
+    }
+  }
+
+  /// Index of the top-level document child that contains `nodeId`.
+  static func topLevelIndex(nodeId: String, in tree: SchemaNode) -> Int? {
+    tree.content.firstIndex { contains($0, nodeId: nodeId) }
+  }
+
+  static func contains(_ node: SchemaNode, nodeId: String) -> Bool {
+    node.id == nodeId || node.content.contains { contains($0, nodeId: nodeId) }
+  }
+
+  static func findNode(_ nodeId: String, in tree: SchemaNode) -> SchemaNode? {
+    if tree.id == nodeId {
+      return tree
+    }
+    for child in tree.content {
+      if let found = findNode(nodeId, in: child) {
+        return found
+      }
+    }
+    return nil
+  }
+
+  static func textNode(_ text: String, marks: [LinearMark]) -> SchemaNode {
+    SchemaNode(
+      type: "text",
+      id: JotIds.create(),
+      attrs: [:],
+      content: [],
+      text: text,
+      marks: marks.map { $0.toSchema() }
+    )
+  }
+
+  /// Runs covering `[from, to)` of a block, cut at the range edges, with their marks kept.
+  static func sliceRuns(_ block: LinearBlock, from: Int, to: Int) -> [LinearRun] {
+    let start = max(0, min(from, to))
+    let end = max(from, to)
+    var offset = 0
+    var result: [LinearRun] = []
+    for run in block.runs {
+      let length = run.utf16Length
+      let runStart = offset
+      let runEnd = offset + length
+      offset = runEnd
+      if runEnd <= start || runStart >= end {
+        continue
+      }
+      if run.isPlaceholder {
+        result.append(run)
+        continue
+      }
+      let lower = max(start, runStart) - runStart
+      let upper = min(end, runEnd) - runStart
+      result.append(
+        LinearRun(text: Utf16.slice(run.text, offset: lower, length: upper - lower), marks: run.marks, id: run.id)
+      )
+    }
+    return result
+  }
+
+  /// True when every character of text between the two carets carries `type`.
+  static func rangeHasMark(_ type: String, from: SchemaSelection, to: SchemaSelection, in linear: LinearDocument) -> Bool {
+    guard let fromIndex = indexOfBlock(nodeId: from.nodeId, in: linear),
+          let toIndex = indexOfBlock(nodeId: to.nodeId, in: linear) else {
+      return false
+    }
+    var sawText = false
+    for i in min(fromIndex, toIndex)...max(fromIndex, toIndex) {
+      let block = linear.blocks[i]
+      let lower = i == fromIndex ? from.offsetUtf16 : 0
+      let upper = i == toIndex ? to.offsetUtf16 : block.utf16Length
+      for run in sliceRuns(block, from: lower, to: upper) where !run.isPlaceholder && !run.text.isEmpty {
+        sawText = true
+        if !run.marks.contains(where: { $0.type == type }) {
+          return false
+        }
+      }
+    }
+    return sawText
+  }
+
+  /// Inverse operations for `operations` applied to `before`, in the order they must run.
+  /// Nil means an operation joined or split blocks, and undo has to restore a snapshot instead.
+  static func invert(_ operations: [SchemaOperation], before: LinearDocument) -> [SchemaOperation]? {
+    var state = before
+    var groups: [[SchemaOperation]] = []
+    for operation in operations {
+      guard let inverse = invertOne(operation, in: state) else {
+        return nil
+      }
+      groups.append(inverse)
+      do {
+        try apply(operation, to: &state)
+      } catch {
+        return nil
+      }
+    }
+    return groups.reversed().flatMap { $0 }
+  }
+
+  private static func invertOne(_ operation: SchemaOperation, in linear: LinearDocument) -> [SchemaOperation]? {
+    switch operation {
+    case let .insertText(position, text, storedMarks):
+      var start = position
+      if linear.blocks.isEmpty && (position.nodeId.isEmpty || position.nodeId == linear.id) {
+        start.nodeId = bodyParagraphId(linear.id)
+      } else if indexOfBlock(nodeId: position.nodeId, in: linear) == nil {
+        return nil
+      }
+      var end = start
+      end.offsetUtf16 += Utf16.count(text)
+      end.affinity = "after"
+      return [
+        .deleteRange(from: start, to: end, deletedSlice: [textNode(text, marks: storedMarks.map { LinearMark.from($0) })])
+      ]
+    case let .deleteRange(from, to, _):
+      guard let index = indexOfBlock(nodeId: from.nodeId, in: linear),
+            indexOfBlock(nodeId: to.nodeId, in: linear) == index else {
+        return nil
+      }
+      return reinsert(sliceRuns(linear.blocks[index], from: from.offsetUtf16, to: to.offsetUtf16), at: from)
+    case let .replaceRange(from, to, slice, _):
+      guard let index = indexOfBlock(nodeId: from.nodeId, in: linear),
+            indexOfBlock(nodeId: to.nodeId, in: linear) == index,
+            let restore = reinsert(sliceRuns(linear.blocks[index], from: from.offsetUtf16, to: to.offsetUtf16), at: from) else {
+        return nil
+      }
+      let insertedLength = Utf16.count(slice.map { $0.plainText() }.joined())
+      guard insertedLength > 0 else {
+        return restore
+      }
+      var end = from
+      end.offsetUtf16 += insertedLength
+      end.affinity = "after"
+      return [.deleteRange(from: from, to: end, deletedSlice: slice)] + restore
+    case let .addMark(from, to, mark):
+      return restoreMarks(mark.type, from: from, to: to, in: linear, removeFirst: true)
+    case let .removeMark(from, to, markType):
+      return restoreMarks(markType, from: from, to: to, in: linear, removeFirst: false)
+    case let .setNodeAttributes(nodeId, patch, priorValues):
+      return [.setNodeAttributes(nodeId: nodeId, patch: priorValues, priorValues: patch)]
+    case let .insertNode(_, _, node):
+      return [.deleteNode(nodeId: node.id, deletedNode: node)]
+    case let .deleteNode(nodeId, _):
+      let tree = linearToDocument(linear)
+      guard let location = parentLocation(nodeId: nodeId, in: tree),
+            let node = findNode(nodeId, in: tree) else {
+        return nil
+      }
+      return [.insertNode(parentId: location.parentId, index: location.index, node: node)]
+    }
+  }
+
+  private static func reinsert(_ runs: [LinearRun], at position: SchemaSelection) -> [SchemaOperation]? {
+    var operations: [SchemaOperation] = []
+    var offset = position.offsetUtf16
+    for run in runs {
+      if run.isPlaceholder || run.text.contains("\u{2028}") {
+        return nil
+      }
+      if run.text.isEmpty {
+        continue
+      }
+      var at = position
+      at.offsetUtf16 = offset
+      operations.append(.insertText(position: at, text: run.text, storedMarks: run.marks.map { $0.toSchema() }))
+      offset += Utf16.count(run.text)
+    }
+    return operations
+  }
+
+  private static func restoreMarks(
+    _ type: String,
+    from: SchemaSelection,
+    to: SchemaSelection,
+    in linear: LinearDocument,
+    removeFirst: Bool
+  ) -> [SchemaOperation]? {
+    guard let fromIndex = indexOfBlock(nodeId: from.nodeId, in: linear),
+          let toIndex = indexOfBlock(nodeId: to.nodeId, in: linear) else {
+      return nil
+    }
+    var operations: [SchemaOperation] = removeFirst ? [.removeMark(from: from, to: to, markType: type)] : []
+    for i in min(fromIndex, toIndex)...max(fromIndex, toIndex) {
+      let block = linear.blocks[i]
+      let lower = i == fromIndex ? from.offsetUtf16 : 0
+      let upper = i == toIndex ? to.offsetUtf16 : block.utf16Length
+      let nodeId = block.paragraphId ?? block.id
+      var offset = max(0, min(lower, upper))
+      for run in sliceRuns(block, from: lower, to: upper) {
+        let length = run.utf16Length
+        if let mark = run.marks.first(where: { $0.type == type }) {
+          operations.append(
+            .addMark(
+              from: SchemaSelection(nodeId: nodeId, offsetUtf16: offset, affinity: "after", revision: from.revision),
+              to: SchemaSelection(nodeId: nodeId, offsetUtf16: offset + length, affinity: "before", revision: from.revision),
+              mark: mark.toSchema()
+            )
+          )
+        }
+        offset += length
+      }
+    }
+    return operations
   }
 
   private static func insertNode(

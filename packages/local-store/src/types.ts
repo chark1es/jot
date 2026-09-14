@@ -41,6 +41,9 @@ export type LocalStoreTableGroup = (typeof LOCAL_STORE_TABLE_GROUPS)[number];
 
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** Undo entries kept per note. The design floor is 100 transactions that survive restart. */
+export const UNDO_HISTORY_LIMIT = 200;
+
 /**
  * Wall clock injected into LocalStore. Structurally compatible with @jot/core Clock
  * and @jot/test-kit FakeClock. Wall time is display and retention only.
@@ -77,7 +80,8 @@ export type NoteSort = 'created' | 'modified' | 'title' | 'manual';
 
 export type ListNotesQuery = {
   readonly folderId?: FolderId | null;
-  readonly archived?: boolean;
+  /** `'any'` lists archived and unarchived notes together. */
+  readonly archived?: boolean | 'any';
   readonly trash?: 'active' | 'trashed' | 'all';
   readonly sort?: NoteSort;
 };
@@ -94,6 +98,29 @@ export type NoteListItem = {
   readonly createdWallMs: number;
   readonly modifiedWallMs: number;
   readonly manualPosition: string;
+  /** The start of the plain body, for list rows. */
+  readonly snippet: string;
+  readonly tagIds: readonly TagId[];
+};
+
+/** Marks a commit that replays an existing undo entry rather than recording a new step. */
+export type HistoryStep = {
+  readonly kind: 'undo' | 'redo';
+  readonly transactionId: TransactionId;
+};
+
+export type HistoryEntry = {
+  readonly transactionId: TransactionId;
+  readonly forward: readonly SchemaOperation[];
+  readonly inverse: readonly SchemaOperation[];
+};
+
+/**
+ * Both arrays are in stack order: the last element is the next one to undo or redo.
+ */
+export type NoteHistory = {
+  readonly undo: readonly HistoryEntry[];
+  readonly redo: readonly HistoryEntry[];
 };
 
 export type CreateNoteInput = {
@@ -173,6 +200,7 @@ export type CommitEditInput = {
   readonly outbox: OutboxItem;
   readonly document: Document;
   readonly restoredFrom?: TransactionId;
+  readonly history?: HistoryStep;
 };
 
 export type SearchQuery = {

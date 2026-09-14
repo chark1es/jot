@@ -64,9 +64,21 @@ export interface EditorBodyTokens {
   readonly desktopMeasure: '72ch';
 }
 
+export interface UiTypeScale {
+  readonly largeTitle: 34;
+  readonly title: 17;
+  readonly body: 17;
+  readonly subhead: 15;
+  readonly footnote: 13;
+  readonly caption: 12;
+  readonly desktop: 13;
+  readonly desktopSecondary: 11;
+}
+
 export interface TypeTokens {
   readonly ui: {
     readonly fontFamily: PlatformFontFamily;
+    readonly size: UiTypeScale;
   };
   readonly editor: {
     readonly fontFamily: PlatformFontFamily;

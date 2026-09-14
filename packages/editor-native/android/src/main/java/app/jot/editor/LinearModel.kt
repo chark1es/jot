@@ -1,820 +1,429 @@
 package app.jot.editor
 
 internal const val SCHEMA_VERSION: Int = 1
-internal const val OBJECT_REPLACEMENT: Char = '\uFFFC'
+internal const val OBJECT_REPLACEMENT: String = "\uFFFC"
+internal const val LINE_SEPARATOR: String = "\u2028"
 
-internal enum class LinearBlockKind {
-  PARAGRAPH,
-  HEADING,
-  CODE_BLOCK,
-  BLOCKQUOTE,
-  BULLET_ITEM,
-  ORDERED_ITEM,
-  TASK_ITEM,
-  ATOMIC,
-}
-
-internal data class LinearMark(
-  val type: String,
-  val attrs: Map<String, Any?> = emptyMap(),
-)
+internal typealias LinearMark = SchemaMark
 
 internal data class LinearRun(
-  val textNodeId: String,
-  val startUtf16: Int,
-  val endUtf16: Int,
-  val marks: List<LinearMark>,
-)
+  val text: String,
+  val marks: List<LinearMark> = emptyList(),
+  val id: String? = null,
+  val placeholderNode: SchemaNode? = null,
+  val fallbackText: String = "",
+) {
+  val isPlaceholder: Boolean
+    get() = placeholderNode != null
 
-internal data class LinearInlineAtom(
-  val startUtf16: Int,
-  val node: Map<String, Any?>,
-)
+  val utf16Length: Int
+    get() = if (isPlaceholder) 1 else text.length
+}
 
+internal enum class LinearBlockKind(val rawValue: String) {
+  PARAGRAPH("paragraph"),
+  HEADING("heading"),
+  CODE_BLOCK("codeBlock"),
+  BULLET_ITEM("bulletItem"),
+  ORDERED_ITEM("orderedItem"),
+  TASK_ITEM("taskItem"),
+  PLACEHOLDER("placeholder"),
+  HORIZONTAL_RULE("horizontalRule"),
+  IMAGE("image"),
+}
+
+/**
+ * One line of the editor: a paragraph, heading, code block, list item, or atomic block.
+ * `id` is the list item for list kinds; `paragraphId` is the paragraph inside it that holds the text.
+ */
 internal data class LinearBlock(
+  val id: String,
   val kind: LinearBlockKind,
-  val nodeId: String,
+  val headingLevel: Int? = null,
+  val listStart: Int? = null,
+  val checked: Int? = null,
   val indent: Int = 0,
-  val listId: String? = null,
-  val listItemId: String? = null,
-  val headingLevel: Int = 1,
-  val languageId: String = "",
-  val orderedStart: Int = 1,
-  val orderedIndex: Int = 1,
-  val checked: Boolean = false,
-  val blockquoteId: String? = null,
-  val text: String = "",
   val runs: List<LinearRun> = emptyList(),
-  val inlineAtoms: List<LinearInlineAtom> = emptyList(),
-  val atomicNode: Map<String, Any?>? = null,
-  val attrs: Map<String, Any?> = emptyMap(),
-)
+  val languageId: String? = null,
+  val paragraphId: String? = null,
+  val listId: String? = null,
+  val quoteChain: List<String> = emptyList(),
+  val placeholderNode: SchemaNode? = null,
+) {
+  val quoteDepth: Int
+    get() = quoteChain.size
+
+  val utf16Length: Int
+    get() = runs.sumOf { it.utf16Length }
+
+  val plainText: String
+    get() = runs.joinToString("") { if (it.isPlaceholder) it.fallbackText else it.text }
+
+  /** The id selections name: the paragraph for list items, the block itself otherwise. */
+  val textNodeId: String
+    get() = paragraphId ?: id
+
+  fun markTypes(offset: Int): List<LinearMark> {
+    var remaining = offset
+    for (run in runs) {
+      val length = run.utf16Length
+      if (remaining <= length) {
+        return run.marks
+      }
+      remaining -= length
+    }
+    return runs.lastOrNull()?.marks ?: emptyList()
+  }
+}
 
 internal data class LinearDocument(
-  val docId: String,
+  val id: String,
   val blocks: List<LinearBlock>,
 )
 
-internal data class LinearSelection(
-  val nodeId: String,
-  val offsetUtf16: Int,
-  val affinity: String,
-  val revision: Int,
-)
+internal class LinearException(message: String) : Exception(message)
 
-internal data class BlockDisplay(
-  val blockIndex: Int,
-  val start: Int,
-  val prefixChars: Int,
-  val textStart: Int,
-  val end: Int,
-  val atomDisplay: List<Int>,
-)
-
-internal data class DisplayDocument(
-  val text: String,
-  val blocks: List<BlockDisplay>,
-)
-
-internal data class ListContext(
-  val listId: String,
-  val itemId: String,
-  val kind: LinearBlockKind,
-  val indent: Int,
-  val orderedStart: Int,
-  val orderedIndex: Int,
-  val checked: Boolean,
-)
-
-internal object JotIds {
-  private const val ALPHABET = "abcdefghijklmnopqrstuvwxyz234567"
-  private val random = java.security.SecureRandom()
-
-  fun createId(): String {
-    val bytes = ByteArray(16)
-    random.nextBytes(bytes)
-    return encodeBase32(bytes)
-  }
-
-  fun deriveId(parentId: String, purpose: String, index: Int): String {
-    val seed = "$parentId|$purpose|$index"
-    var h1 = 0x811c9dc5.toInt()
-    var h2 = 0x01000193
-    var h3 = 0x243f6a88
-    var h4 = (0x85a308d3).toInt()
-    for (i in seed.indices) {
-      val byte = seed[i].code and 0xff
-      h1 = mix32(h1, byte, 0x01000193)
-      h2 = mix32(h2, byte xor (i and 0xff), 0x811c9dc5.toInt())
-      h3 = mix32(h3, (byte + i) and 0xff, 0x1b873593)
-      h4 = mix32(h4, byte, 0x9e3779b9.toInt())
-    }
-    val out = ByteArray(16)
-    write32(out, 0, h1)
-    write32(out, 4, h2)
-    write32(out, 8, h3)
-    write32(out, 12, h4)
-    return encodeBase32(out)
-  }
-
-  fun encodeBase32(bytes: ByteArray): String {
-    var bits = 0
-    var acc = 0
-    val out = StringBuilder()
-    for (byte in bytes) {
-      acc = (acc shl 8) or (byte.toInt() and 0xff)
-      bits += 8
-      while (bits >= 5) {
-        out.append(ALPHABET[(acc ushr (bits - 5)) and 31])
-        bits -= 5
-      }
-    }
-    if (bits > 0) {
-      out.append(ALPHABET[(acc shl (5 - bits)) and 31])
-    }
-    return out.toString()
-  }
-
-  private fun mix32(h: Int, byte: Int, mul: Int): Int = (h xor byte) * mul
-
-  private fun write32(out: ByteArray, offset: Int, value: Int) {
-    out[offset] = (value and 0xff).toByte()
-    out[offset + 1] = ((value ushr 8) and 0xff).toByte()
-    out[offset + 2] = ((value ushr 16) and 0xff).toByte()
-    out[offset + 3] = ((value ushr 24) and 0xff).toByte()
-  }
-}
-
-internal object JsonMaps {
-  @Suppress("UNCHECKED_CAST")
-  fun mapOf(value: Any?): Map<String, Any?> =
-    (value as? Map<String, Any?>) ?: emptyMap()
-
-  @Suppress("UNCHECKED_CAST")
-  fun listOf(value: Any?): List<Any?> =
-    (value as? List<Any?>) ?: emptyList()
-
-  fun string(value: Any?, fallback: String = ""): String =
-    value as? String ?: fallback
-
-  fun int(value: Any?, fallback: Int = 0): Int =
-    when (value) {
-      is Int -> value
-      is Long -> value.toInt()
-      is Double -> value.toInt()
-      is Float -> value.toInt()
-      is Number -> value.toInt()
-      else -> fallback
-    }
-}
-
+/** Kotlin port of `LinearModel.swift`. Both platforms must produce the same operations and trees. */
 internal object LinearModel {
-  fun fromDocument(root: Map<String, Any?>): LinearDocument {
-    val docId = JsonMaps.string(root["id"])
+  fun documentToLinear(doc: SchemaNode): LinearDocument {
     val blocks = mutableListOf<LinearBlock>()
-    flattenBlocks(JsonMaps.listOf(root["content"]), indent = 0, list = null, out = blocks)
-    return LinearDocument(docId = docId, blocks = blocks)
+    flatten(doc.content, indent = 0, quoteChain = emptyList(), into = blocks)
+    return LinearDocument(doc.id, blocks)
   }
 
-  fun toDocument(document: LinearDocument): Map<String, Any?> {
-    val content = mutableListOf<Map<String, Any?>>()
-    var i = 0
-    val blocks = document.blocks
-    while (i < blocks.size) {
-      val block = blocks[i]
-      when {
-        isQuoted(block) -> {
-          val (quoteNode, consumed) = consumeBlockquote(blocks, i)
-          content.add(quoteNode)
-          i += consumed
-        }
-        isListKind(block.kind) -> {
-          val (listNode, consumed) = consumeList(blocks, i, minIndent = block.indent)
-          content.add(listNode)
-          i += consumed
-        }
-        else -> {
-          content.add(textContainerNode(block))
-          i += 1
-        }
-      }
+  /** Same derivation as `emptyDocument` in TypeScript, so the first keystroke in an empty note targets an id every layer agrees on. */
+  fun bodyParagraphId(docId: String): String = JotIds.deriveId(docId, "paragraph", 0)
+
+  fun withEditableBody(linear: LinearDocument): LinearDocument {
+    if (linear.blocks.isNotEmpty()) {
+      return linear
     }
-    return mapOf(
-      "type" to "doc",
-      "id" to document.docId,
-      "content" to content,
-    )
+    return linear.copy(blocks = listOf(LinearBlock(id = bodyParagraphId(linear.id), kind = LinearBlockKind.PARAGRAPH)))
   }
 
-  fun buildDisplay(document: LinearDocument): DisplayDocument {
-    val text = StringBuilder()
-    val layouts = mutableListOf<BlockDisplay>()
-    document.blocks.forEachIndexed { index, block ->
-      if (index > 0) {
-        text.append('\n')
-      }
-      val start = text.length
-      val prefixChars = prefixChars(block)
-      repeat(prefixChars) { text.append(OBJECT_REPLACEMENT) }
-      val textStart = text.length
-      val atoms = block.inlineAtoms.sortedBy { it.startUtf16 }
-      val atomDisplay = mutableListOf<Int>()
-      var cursor = 0
-      for (atom in atoms) {
-        val at = atom.startUtf16.coerceIn(0, block.text.length)
-        text.append(block.text, cursor, at)
-        atomDisplay.add(text.length)
-        text.append(OBJECT_REPLACEMENT)
-        cursor = at
-      }
-      text.append(block.text, cursor, block.text.length)
-      layouts.add(
-        BlockDisplay(
-          blockIndex = index,
-          start = start,
-          prefixChars = prefixChars,
-          textStart = textStart,
-          end = text.length,
-          atomDisplay = atomDisplay,
-        ),
-      )
-    }
-    return DisplayDocument(text = text.toString(), blocks = layouts)
-  }
+  fun linearToDocument(linear: LinearDocument): SchemaNode =
+    SchemaNode(type = "doc", id = linear.id, content = nestBlocks(linear.blocks, 0, minIndent = 0).first)
 
-  fun prefixChars(block: LinearBlock): Int =
-    when (block.kind) {
-      LinearBlockKind.TASK_ITEM, LinearBlockKind.ATOMIC -> 1
-      else -> 0
-    }
-
-  fun utf16Length(value: String): Int = value.length
-
-  fun selectionFromDisplay(
-    document: LinearDocument,
-    display: DisplayDocument,
-    displayOffset: Int,
-    affinity: String,
-    revision: Int,
-  ): LinearSelection {
-    if (document.blocks.isEmpty()) {
-      return LinearSelection(document.docId, 0, affinity, revision)
-    }
-    val offset = displayOffset.coerceIn(0, display.text.length)
-    val layout = display.blocks.lastOrNull { offset >= it.start }
-      ?: display.blocks.first()
-    val block = document.blocks[layout.blockIndex]
-    val nodeId = block.listItemId ?: block.nodeId
-    val schemaOffset = displayToSchema(layout, block, offset)
-    return LinearSelection(nodeId, schemaOffset, affinity, revision)
-  }
-
-  fun displayIndex(
-    document: LinearDocument,
-    display: DisplayDocument,
-    selection: LinearSelection,
-  ): Int {
-    val index = findBlockIndex(document, selection.nodeId) ?: return 0
-    val layout = display.blocks.getOrNull(index) ?: return 0
-    val block = document.blocks[index]
-    return schemaToDisplay(layout, block, selection.offsetUtf16)
-  }
-
-  fun findBlockIndex(document: LinearDocument, nodeId: String): Int? {
-    val byNode = document.blocks.indexOfFirst { it.nodeId == nodeId }
-    if (byNode >= 0) {
-      return byNode
-    }
-    val byItem = document.blocks.indexOfFirst { it.listItemId == nodeId }
-    return if (byItem >= 0) byItem else null
-  }
-
-  fun blockAt(document: LinearDocument, nodeId: String): LinearBlock? {
-    val index = findBlockIndex(document, nodeId) ?: return null
-    return document.blocks[index]
-  }
-
-  fun applyOperations(document: LinearDocument, operations: List<Map<String, Any?>>): LinearDocument {
-    var current = document
+  fun apply(operations: List<SchemaOperation>, linear: LinearDocument): LinearDocument {
+    var current = linear
     for (operation in operations) {
-      current = applyOperation(current, operation)
+      current = apply(operation, current)
     }
     return current
   }
 
-  fun replaceBlockText(
-    document: LinearDocument,
-    nodeId: String,
-    fromUtf16: Int,
-    toUtf16: Int,
-    inserted: String,
-    marks: List<LinearMark>,
-  ): LinearDocument {
-    val index = findBlockIndex(document, nodeId) ?: return document
-    val block = document.blocks[index]
-    val start = fromUtf16.coerceIn(0, block.text.length)
-    val end = toUtf16.coerceIn(start, block.text.length)
-    val newText = block.text.substring(0, start) + inserted + block.text.substring(end)
-    val newRuns = replaceRuns(block, start, end, inserted, marks)
-    val delta = inserted.length - (end - start)
-    val newAtoms = block.inlineAtoms.mapNotNull { atom ->
-      when {
-        atom.startUtf16 in start until end -> null
-        atom.startUtf16 >= end -> atom.copy(startUtf16 = atom.startUtf16 + delta)
-        else -> atom
+  fun apply(operation: SchemaOperation, linear: LinearDocument): LinearDocument =
+    when (operation) {
+      is SchemaOperation.InsertText -> {
+        if (Utf16.hasUnpairedSurrogates(operation.text)) {
+          throw LinearException("unpaired surrogate")
+        }
+        insertText(operation.text, operation.position, operation.storedMarks, linear)
+      }
+      is SchemaOperation.DeleteRange -> deleteRange(operation.from, operation.to, linear)
+      is SchemaOperation.ReplaceRange -> {
+        val deleted = deleteRange(operation.from, operation.to, linear)
+        val text = operation.slice.joinToString("") { it.plainText() }
+        insertText(text, operation.from, firstMarks(operation.slice), deleted)
+      }
+      is SchemaOperation.AddMark -> applyMark(operation.mark, operation.from, operation.to, add = true, linear = linear)
+      is SchemaOperation.RemoveMark -> applyMark(LinearMark(operation.markType), operation.from, operation.to, add = false, linear = linear)
+      is SchemaOperation.SetNodeAttributes -> setAttributes(operation.nodeId, operation.patch, linear)
+      is SchemaOperation.InsertNode ->
+        documentToLinear(insertNode(operation.node, operation.parentId, operation.index, linearToDocument(linear)))
+      is SchemaOperation.DeleteNode -> documentToLinear(deleteNode(operation.nodeId, linearToDocument(linear)))
+    }
+
+  fun indexOfBlock(nodeId: String, linear: LinearDocument): Int? {
+    val index = linear.blocks.indexOfFirst { it.id == nodeId || it.paragraphId == nodeId }
+    return if (index >= 0) index else null
+  }
+
+  fun block(nodeId: String, linear: LinearDocument): LinearBlock? = indexOfBlock(nodeId, linear)?.let { linear.blocks[it] }
+
+  fun isListKind(kind: LinearBlockKind): Boolean =
+    kind == LinearBlockKind.BULLET_ITEM || kind == LinearBlockKind.ORDERED_ITEM || kind == LinearBlockKind.TASK_ITEM
+
+  fun isAtomicKind(kind: LinearBlockKind): Boolean =
+    kind == LinearBlockKind.HORIZONTAL_RULE || kind == LinearBlockKind.IMAGE || kind == LinearBlockKind.PLACEHOLDER
+
+  /** Characters drawn before a block's text: a quote bar, then a bullet, number, or checkbox. */
+  fun leadingCount(block: LinearBlock): Int = (if (isListKind(block.kind)) 1 else 0) + (if (block.quoteChain.isEmpty()) 0 else 1)
+
+  fun parentLocation(nodeId: String, tree: SchemaNode): Pair<String, Int>? {
+    tree.content.forEachIndexed { index, child ->
+      if (child.id == nodeId) {
+        return tree.id to index
+      }
+      val nested = parentLocation(nodeId, child)
+      if (nested != null) {
+        return nested
       }
     }
-    val updated = block.copy(text = newText, runs = newRuns, inlineAtoms = newAtoms)
-    return document.copy(blocks = document.blocks.toMutableList().also { it[index] = updated })
+    return null
   }
 
-  fun setBlockKind(
-    document: LinearDocument,
-    nodeId: String,
-    kind: LinearBlockKind,
-    headingLevel: Int = 1,
-    languageId: String = "",
-  ): LinearDocument {
-    val index = findBlockIndex(document, nodeId) ?: return document
-    val block = document.blocks[index]
-    val updated = when (kind) {
-      LinearBlockKind.BULLET_ITEM ->
-        block.copy(
-          kind = kind,
-          indent = block.indent,
-          listId = block.listId ?: JotIds.createId(),
-          listItemId = block.listItemId ?: JotIds.createId(),
-          headingLevel = 1,
-          languageId = "",
-        )
-      LinearBlockKind.ORDERED_ITEM ->
-        block.copy(
-          kind = kind,
-          listId = block.listId ?: JotIds.createId(),
-          listItemId = block.listItemId ?: JotIds.createId(),
-          orderedStart = 1,
-          orderedIndex = 1,
-        )
-      LinearBlockKind.TASK_ITEM ->
-        block.copy(
-          kind = kind,
-          listId = block.listId ?: JotIds.createId(),
-          listItemId = block.listItemId ?: JotIds.createId(),
-          checked = block.checked,
-        )
-      LinearBlockKind.HEADING ->
-        block.copy(
-          kind = kind,
-          headingLevel = headingLevel.coerceIn(1, 6),
-          listId = null,
-          listItemId = null,
-          indent = 0,
-        )
-      LinearBlockKind.CODE_BLOCK ->
-        block.copy(
-          kind = kind,
-          languageId = languageId,
-          listId = null,
-          listItemId = null,
-          indent = 0,
-          runs = block.runs.map { it.copy(marks = emptyList()) },
-        )
-      LinearBlockKind.PARAGRAPH ->
-        block.copy(
-          kind = kind,
-          listId = null,
-          listItemId = null,
-          indent = 0,
-          headingLevel = 1,
-          languageId = "",
-          blockquoteId = null,
-        )
-      LinearBlockKind.BLOCKQUOTE ->
-        block.copy(
-          kind = kind,
-          blockquoteId = block.blockquoteId ?: JotIds.createId(),
-          listId = null,
-          listItemId = null,
-          indent = 0,
-          headingLevel = 1,
-          languageId = "",
-        )
-      LinearBlockKind.ATOMIC -> block
+  /** Index of the top-level document child that contains `nodeId`. */
+  fun topLevelIndex(nodeId: String, tree: SchemaNode): Int? {
+    val index = tree.content.indexOfFirst { contains(it, nodeId) }
+    return if (index >= 0) index else null
+  }
+
+  fun contains(node: SchemaNode, nodeId: String): Boolean = node.id == nodeId || node.content.any { contains(it, nodeId) }
+
+  fun findNode(nodeId: String, tree: SchemaNode): SchemaNode? {
+    if (tree.id == nodeId) {
+      return tree
     }
-    return document.copy(blocks = document.blocks.toMutableList().also { it[index] = updated })
-  }
-
-  fun toggleListKind(document: LinearDocument, nodeId: String, kind: LinearBlockKind): LinearDocument {
-    val block = blockAt(document, nodeId) ?: return document
-    return if (block.kind == kind) {
-      setBlockKind(document, nodeId, LinearBlockKind.PARAGRAPH)
-    } else {
-      setBlockKind(document, nodeId, kind)
+    for (child in tree.content) {
+      val found = findNode(nodeId, child)
+      if (found != null) {
+        return found
+      }
     }
+    return null
   }
 
-  fun setChecked(document: LinearDocument, nodeId: String, checked: Boolean): LinearDocument {
-    val index = findBlockIndex(document, nodeId) ?: return document
-    val block = document.blocks[index]
-    if (block.kind != LinearBlockKind.TASK_ITEM) {
-      return document
+  fun textNode(text: String, marks: List<LinearMark>): SchemaNode =
+    SchemaNode(type = "text", id = JotIds.createId(), text = text, marks = marks)
+
+  /** Runs covering `[from, to)` of a block, cut at the range edges, with their marks kept. */
+  fun sliceRuns(block: LinearBlock, from: Int, to: Int): List<LinearRun> {
+    val start = maxOf(0, minOf(from, to))
+    val end = maxOf(from, to)
+    var offset = 0
+    val result = mutableListOf<LinearRun>()
+    for (run in block.runs) {
+      val length = run.utf16Length
+      val runStart = offset
+      val runEnd = offset + length
+      offset = runEnd
+      if (runEnd <= start || runStart >= end) {
+        continue
+      }
+      if (run.isPlaceholder) {
+        result.add(run)
+        continue
+      }
+      val lower = maxOf(start, runStart) - runStart
+      val upper = minOf(end, runEnd) - runStart
+      result.add(LinearRun(Utf16.slice(run.text, lower, upper - lower), run.marks, run.id))
     }
-    return document.copy(
-      blocks = document.blocks.toMutableList().also {
-        it[index] = block.copy(checked = checked)
-      },
-    )
+    return result
   }
 
-  fun toggleMark(
-    document: LinearDocument,
-    selection: LinearSelection,
-    end: LinearSelection,
+  /** True when every character of text between the two carets carries `type`. */
+  fun rangeHasMark(type: String, from: SchemaSelection, to: SchemaSelection, linear: LinearDocument): Boolean {
+    val fromIndex = indexOfBlock(from.nodeId, linear) ?: return false
+    val toIndex = indexOfBlock(to.nodeId, linear) ?: return false
+    var sawText = false
+    for (i in minOf(fromIndex, toIndex)..maxOf(fromIndex, toIndex)) {
+      val block = linear.blocks[i]
+      val lower = if (i == fromIndex) from.offsetUtf16 else 0
+      val upper = if (i == toIndex) to.offsetUtf16 else block.utf16Length
+      for (run in sliceRuns(block, lower, upper)) {
+        if (run.isPlaceholder || run.text.isEmpty()) {
+          continue
+        }
+        sawText = true
+        if (run.marks.none { it.type == type }) {
+          return false
+        }
+      }
+    }
+    return sawText
+  }
+
+  /**
+   * Inverse operations for `operations` applied to `before`, in the order they must run.
+   * Null means an operation joined or split blocks, and undo has to restore a snapshot instead.
+   */
+  fun invert(operations: List<SchemaOperation>, before: LinearDocument): List<SchemaOperation>? {
+    var state = before
+    val groups = mutableListOf<List<SchemaOperation>>()
+    for (operation in operations) {
+      val inverse = invertOne(operation, state) ?: return null
+      groups.add(inverse)
+      state = try {
+        apply(operation, state)
+      } catch (_: LinearException) {
+        return null
+      }
+    }
+    return groups.reversed().flatten()
+  }
+
+  private fun invertOne(operation: SchemaOperation, linear: LinearDocument): List<SchemaOperation>? =
+    when (operation) {
+      is SchemaOperation.InsertText -> {
+        var start = operation.position
+        if (linear.blocks.isEmpty() && (start.nodeId.isEmpty() || start.nodeId == linear.id)) {
+          start = start.copy(nodeId = bodyParagraphId(linear.id))
+        }
+        if (linear.blocks.isNotEmpty() && indexOfBlock(start.nodeId, linear) == null) {
+          null
+        } else {
+          val end = start.copy(offsetUtf16 = start.offsetUtf16 + operation.text.length, affinity = "after")
+          listOf(SchemaOperation.DeleteRange(start, end, listOf(textNode(operation.text, operation.storedMarks))))
+        }
+      }
+      is SchemaOperation.DeleteRange -> {
+        val index = indexOfBlock(operation.from.nodeId, linear)
+        if (index == null || indexOfBlock(operation.to.nodeId, linear) != index) {
+          null
+        } else {
+          reinsert(sliceRuns(linear.blocks[index], operation.from.offsetUtf16, operation.to.offsetUtf16), operation.from)
+        }
+      }
+      is SchemaOperation.ReplaceRange -> {
+        val index = indexOfBlock(operation.from.nodeId, linear)
+        val restore = if (index == null || indexOfBlock(operation.to.nodeId, linear) != index) {
+          null
+        } else {
+          reinsert(sliceRuns(linear.blocks[index], operation.from.offsetUtf16, operation.to.offsetUtf16), operation.from)
+        }
+        if (restore == null) {
+          null
+        } else {
+          val insertedLength = operation.slice.joinToString("") { it.plainText() }.length
+          if (insertedLength == 0) {
+            restore
+          } else {
+            val end = operation.from.copy(offsetUtf16 = operation.from.offsetUtf16 + insertedLength, affinity = "after")
+            listOf(SchemaOperation.DeleteRange(operation.from, end, operation.slice)) + restore
+          }
+        }
+      }
+      is SchemaOperation.AddMark -> restoreMarks(operation.mark.type, operation.from, operation.to, linear, removeFirst = true)
+      is SchemaOperation.RemoveMark -> restoreMarks(operation.markType, operation.from, operation.to, linear, removeFirst = false)
+      is SchemaOperation.SetNodeAttributes ->
+        listOf(SchemaOperation.SetNodeAttributes(operation.nodeId, operation.priorValues, operation.patch))
+      is SchemaOperation.InsertNode -> listOf(SchemaOperation.DeleteNode(operation.node.id, operation.node))
+      is SchemaOperation.DeleteNode -> {
+        val tree = linearToDocument(linear)
+        val location = parentLocation(operation.nodeId, tree)
+        val node = findNode(operation.nodeId, tree)
+        if (location == null || node == null) {
+          null
+        } else {
+          listOf(SchemaOperation.InsertNode(location.first, location.second, node))
+        }
+      }
+    }
+
+  private fun reinsert(runs: List<LinearRun>, position: SchemaSelection): List<SchemaOperation>? {
+    val operations = mutableListOf<SchemaOperation>()
+    var offset = position.offsetUtf16
+    for (run in runs) {
+      if (run.isPlaceholder || run.text.contains(LINE_SEPARATOR)) {
+        return null
+      }
+      if (run.text.isEmpty()) {
+        continue
+      }
+      operations.add(SchemaOperation.InsertText(position.copy(offsetUtf16 = offset), run.text, run.marks))
+      offset += run.text.length
+    }
+    return operations
+  }
+
+  private fun restoreMarks(
     type: String,
-    attrs: Map<String, Any?> = emptyMap(),
-  ): LinearDocument {
-    if (selection.nodeId != end.nodeId) {
-      return document
+    from: SchemaSelection,
+    to: SchemaSelection,
+    linear: LinearDocument,
+    removeFirst: Boolean,
+  ): List<SchemaOperation>? {
+    val fromIndex = indexOfBlock(from.nodeId, linear) ?: return null
+    val toIndex = indexOfBlock(to.nodeId, linear) ?: return null
+    val operations = mutableListOf<SchemaOperation>()
+    if (removeFirst) {
+      operations.add(SchemaOperation.RemoveMark(from, to, type))
     }
-    val start = minOf(selection.offsetUtf16, end.offsetUtf16)
-    val stop = maxOf(selection.offsetUtf16, end.offsetUtf16)
-    if (start == stop) {
-      return document
-    }
-    val index = findBlockIndex(document, selection.nodeId) ?: return document
-    val block = document.blocks[index]
-    val covered = block.runs.filter { it.endUtf16 > start && it.startUtf16 < stop }
-    val allHave = covered.isNotEmpty() && covered.all { run -> run.marks.any { it.type == type } }
-    val newRuns = block.runs.flatMap { run ->
-      val overlapStart = maxOf(run.startUtf16, start)
-      val overlapEnd = minOf(run.endUtf16, stop)
-      if (overlapStart >= overlapEnd) {
-        return@flatMap listOf(run)
-      }
-      val parts = mutableListOf<LinearRun>()
-      if (run.startUtf16 < overlapStart) {
-        parts.add(run.copy(endUtf16 = overlapStart, textNodeId = run.textNodeId))
-      }
-      val marks = if (allHave) {
-        run.marks.filterNot { it.type == type }
-      } else {
-        (run.marks.filterNot { it.type == type } + LinearMark(type, attrs))
-      }
-      parts.add(
-        LinearRun(
-          textNodeId = run.textNodeId,
-          startUtf16 = overlapStart,
-          endUtf16 = overlapEnd,
-          marks = marks,
-        ),
-      )
-      if (run.endUtf16 > overlapEnd) {
-        parts.add(run.copy(startUtf16 = overlapEnd))
-      }
-      parts
-    }
-    return document.copy(
-      blocks = document.blocks.toMutableList().also {
-        it[index] = block.copy(runs = newRuns)
-      },
-    )
-  }
-
-  fun isAllowedHref(href: String): Boolean {
-    if (href.isEmpty() || !href[0].isLetter()) {
-      return false
-    }
-    var i = 1
-    while (i < href.length) {
-      val ch = href[i]
-      if (ch == ':') {
-        val scheme = href.substring(0, i).lowercase()
-        return scheme == "https" || scheme == "http" || scheme == "mailto"
-      }
-      if (!ch.isLetterOrDigit() && ch != '+' && ch != '.' && ch != '-') {
-        return false
-      }
-      i += 1
-    }
-    return false
-  }
-
-  fun activeMarks(document: LinearDocument, selection: LinearSelection): List<LinearMark> {
-    val block = blockAt(document, selection.nodeId) ?: return emptyList()
-    val offset = selection.offsetUtf16.coerceIn(0, block.text.length)
-    val probe = if (selection.affinity == "before" && offset > 0) offset - 1 else offset
-    val run = block.runs.firstOrNull { probe >= it.startUtf16 && probe < it.endUtf16 }
-      ?: block.runs.lastOrNull { probe >= it.startUtf16 && probe <= it.endUtf16 }
-    return run?.marks ?: emptyList()
-  }
-
-  fun sliceText(document: LinearDocument, from: LinearSelection, to: LinearSelection): String {
-    if (from.nodeId == to.nodeId) {
-      val block = blockAt(document, from.nodeId) ?: return ""
-      val start = minOf(from.offsetUtf16, to.offsetUtf16).coerceIn(0, block.text.length)
-      val end = maxOf(from.offsetUtf16, to.offsetUtf16).coerceIn(start, block.text.length)
-      return block.text.substring(start, end)
-    }
-    val startIndex = findBlockIndex(document, from.nodeId) ?: return ""
-    val endIndex = findBlockIndex(document, to.nodeId) ?: return ""
-    val lo = minOf(startIndex, endIndex)
-    val hi = maxOf(startIndex, endIndex)
-    val parts = mutableListOf<String>()
-    for (i in lo..hi) {
-      val block = document.blocks[i]
-      val start = if (i == lo) from.offsetUtf16.coerceIn(0, block.text.length) else 0
-      val end = if (i == hi) to.offsetUtf16.coerceIn(0, block.text.length) else block.text.length
-      parts.add(block.text.substring(start.coerceAtMost(end), end.coerceAtLeast(start)))
-    }
-    return parts.joinToString("")
-  }
-
-  fun textSliceNode(text: String, marks: List<LinearMark>, parentId: String): Map<String, Any?> {
-    val id = JotIds.deriveId(parentId, "text", 0)
-    return mapOf(
-      "type" to "text",
-      "id" to id,
-      "text" to text,
-      "marks" to marks.map { markToMap(it) },
-    )
-  }
-
-  fun selectionMap(selection: LinearSelection): Map<String, Any?> =
-    mapOf(
-      "nodeId" to selection.nodeId,
-      "offsetUtf16" to selection.offsetUtf16,
-      "affinity" to selection.affinity,
-      "revision" to selection.revision,
-    )
-
-  fun parseSelection(value: Any?, fallbackRevision: Int): LinearSelection {
-    val map = JsonMaps.mapOf(value)
-    return LinearSelection(
-      nodeId = JsonMaps.string(map["nodeId"]),
-      offsetUtf16 = JsonMaps.int(map["offsetUtf16"]),
-      affinity = JsonMaps.string(map["affinity"], "after"),
-      revision = JsonMaps.int(map["revision"], fallbackRevision),
-    )
-  }
-
-  fun markToMap(mark: LinearMark): Map<String, Any?> {
-    return if (mark.attrs.isEmpty()) {
-      mapOf("type" to mark.type)
-    } else {
-      mapOf("type" to mark.type, "attrs" to mark.attrs)
-    }
-  }
-
-  fun insertParagraphAfter(document: LinearDocument, nodeId: String, remaining: String): LinearDocument {
-    val index = findBlockIndex(document, nodeId) ?: return document
-    val block = document.blocks[index]
-    val newId = JotIds.createId()
-    val newBlock = LinearBlock(
-      kind = when (block.kind) {
-        LinearBlockKind.BULLET_ITEM, LinearBlockKind.ORDERED_ITEM, LinearBlockKind.TASK_ITEM -> block.kind
-        LinearBlockKind.BLOCKQUOTE -> LinearBlockKind.BLOCKQUOTE
-        else -> LinearBlockKind.PARAGRAPH
-      },
-      nodeId = newId,
-      indent = block.indent,
-      listId = if (isListKind(block.kind)) (block.listId ?: JotIds.createId()) else null,
-      listItemId = if (isListKind(block.kind)) JotIds.createId() else null,
-      orderedStart = block.orderedStart,
-      orderedIndex = block.orderedIndex + 1,
-      checked = false,
-      blockquoteId = if (isQuoted(block)) (block.blockquoteId ?: JotIds.createId()) else null,
-      text = remaining,
-      runs = if (remaining.isEmpty()) emptyList() else listOf(
-        LinearRun(JotIds.deriveId(newId, "text", 0), 0, remaining.length, emptyList()),
-      ),
-    )
-    val blocks = document.blocks.toMutableList()
-    blocks.add(index + 1, newBlock)
-    return document.copy(blocks = blocks)
-  }
-
-  fun ensureEditableBlock(document: LinearDocument): LinearDocument {
-    if (document.blocks.isNotEmpty()) {
-      return document
-    }
-    val paragraphId = JotIds.deriveId(document.docId, "paragraph", 0)
-    return document.copy(
-      blocks = listOf(
-        LinearBlock(
-          kind = LinearBlockKind.PARAGRAPH,
-          nodeId = paragraphId,
-        ),
-      ),
-    )
-  }
-
-  private fun applyOperation(document: LinearDocument, operation: Map<String, Any?>): LinearDocument {
-    return when (JsonMaps.string(operation["type"])) {
-      "insertText" -> {
-        val position = parseSelection(operation["position"], 0)
-        val text = JsonMaps.string(operation["text"])
-        val marks = parseMarks(operation["storedMarks"])
-        replaceBlockText(document, position.nodeId, position.offsetUtf16, position.offsetUtf16, text, marks)
-      }
-      "deleteRange" -> {
-        val from = parseSelection(operation["from"], 0)
-        val to = parseSelection(operation["to"], 0)
-        replaceBlockText(document, from.nodeId, from.offsetUtf16, to.offsetUtf16, "", emptyList())
-      }
-      "replaceRange" -> {
-        val from = parseSelection(operation["from"], 0)
-        val to = parseSelection(operation["to"], 0)
-        val slice = slicePlainText(operation["slice"])
-        val sliceMarks = parseMarks(
-          JsonMaps.mapOf(JsonMaps.listOf(JsonMaps.mapOf(operation["slice"])["nodes"]).firstOrNull())["marks"],
-        )
-        val marks = parseMarks(operation["storedMarks"]).ifEmpty { sliceMarks }
-        replaceBlockText(document, from.nodeId, from.offsetUtf16, to.offsetUtf16, slice, marks)
-      }
-      "addMark" -> {
-        val range = JsonMaps.mapOf(operation["range"])
-        val from = parseSelection(range["from"], 0)
-        val to = parseSelection(range["to"], 0)
-        val mark = parseMarks(listOf(operation["mark"])).firstOrNull() ?: return document
-        applyMark(document, from, to, mark, add = true)
-      }
-      "removeMark" -> {
-        val range = JsonMaps.mapOf(operation["range"])
-        val from = parseSelection(range["from"], 0)
-        val to = parseSelection(range["to"], 0)
-        applyMark(document, from, to, LinearMark(JsonMaps.string(operation["markType"])), add = false)
-      }
-      "setNodeAttributes" -> {
-        val nodeId = JsonMaps.string(operation["nodeId"])
-        val patch = JsonMaps.mapOf(operation["patch"])
-        var current = document
-        val kindName = JsonMaps.string(patch["kind"])
-        val listKind = JsonMaps.string(patch["listKind"])
-        val typeName = JsonMaps.string(patch["type"])
-        when {
-          kindName.isNotEmpty() ->
-            current = setBlockKind(
-              current,
-              nodeId,
-              blockKind(kindName),
-              headingLevel = JsonMaps.int(patch["level"], 1),
-              languageId = JsonMaps.string(patch["languageId"]),
-            )
-          listKind.isNotEmpty() -> current = setBlockKind(current, nodeId, blockKind(listKind))
-          typeName == "heading" || patch.containsKey("level") ->
-            current = setBlockKind(current, nodeId, LinearBlockKind.HEADING, headingLevel = JsonMaps.int(patch["level"], 1))
-          typeName == "codeBlock" ->
-            current = setBlockKind(current, nodeId, LinearBlockKind.CODE_BLOCK, languageId = JsonMaps.string(patch["languageId"]))
-          typeName == "paragraph" -> current = setBlockKind(current, nodeId, LinearBlockKind.PARAGRAPH)
-          typeName == "blockquote" -> current = setBlockKind(current, nodeId, LinearBlockKind.BLOCKQUOTE)
-          patch.containsKey("languageId") ->
-            current = setBlockKind(current, nodeId, LinearBlockKind.CODE_BLOCK, languageId = JsonMaps.string(patch["languageId"]))
-        }
-        if (patch.containsKey("checked")) {
-          current = setChecked(current, nodeId, JsonMaps.int(patch["checked"]) == 1)
-        }
-        current
-      }
-      "insertNode" -> {
-        val node = JsonMaps.mapOf(operation["node"])
-        val inserted = fromDocument(
-          mapOf(
-            "type" to "doc",
-            "id" to document.docId,
-            "content" to listOf(node),
-          ),
-        ).blocks
-        val index = JsonMaps.int(operation["index"]).coerceIn(0, document.blocks.size)
-        val blocks = document.blocks.toMutableList()
-        blocks.addAll(index, inserted)
-        document.copy(blocks = blocks)
-      }
-      "deleteNode" -> {
-        val nodeId = JsonMaps.string(operation["nodeId"])
-        document.copy(blocks = document.blocks.filterNot { it.nodeId == nodeId || it.listItemId == nodeId || it.listId == nodeId })
-      }
-      else -> document
-    }
-  }
-
-  private fun applyMark(
-    document: LinearDocument,
-    from: LinearSelection,
-    to: LinearSelection,
-    mark: LinearMark,
-    add: Boolean,
-  ): LinearDocument {
-    if (from.nodeId != to.nodeId) {
-      return document
-    }
-    val start = minOf(from.offsetUtf16, to.offsetUtf16)
-    val stop = maxOf(from.offsetUtf16, to.offsetUtf16)
-    if (start == stop) {
-      return document
-    }
-    val index = findBlockIndex(document, from.nodeId) ?: return document
-    val block = document.blocks[index]
-    val newRuns = block.runs.flatMap { run ->
-      val overlapStart = maxOf(run.startUtf16, start)
-      val overlapEnd = minOf(run.endUtf16, stop)
-      if (overlapStart >= overlapEnd) {
-        return@flatMap listOf(run)
-      }
-      val parts = mutableListOf<LinearRun>()
-      if (run.startUtf16 < overlapStart) {
-        parts.add(run.copy(endUtf16 = overlapStart))
-      }
-      val marks = if (add) {
-        run.marks.filterNot { it.type == mark.type } + mark
-      } else {
-        run.marks.filterNot { it.type == mark.type }
-      }
-      parts.add(run.copy(startUtf16 = overlapStart, endUtf16 = overlapEnd, marks = marks))
-      if (run.endUtf16 > overlapEnd) {
-        parts.add(run.copy(startUtf16 = overlapEnd))
-      }
-      parts
-    }
-    return document.copy(blocks = document.blocks.toMutableList().also { it[index] = block.copy(runs = newRuns) })
-  }
-
-  private fun slicePlainText(slice: Any?): String {
-    val nodes = JsonMaps.listOf(JsonMaps.mapOf(slice)["nodes"])
-    return nodes.joinToString("") { plainText(JsonMaps.mapOf(it)) }
-  }
-
-  private fun plainText(node: Map<String, Any?>): String {
-    val type = JsonMaps.string(node["type"])
-    if (type == "text") {
-      return JsonMaps.string(node["text"])
-    }
-    return JsonMaps.listOf(node["content"]).joinToString("") { plainText(JsonMaps.mapOf(it)) }
-  }
-
-  private fun flattenBlocks(
-    nodes: List<Any?>,
-    indent: Int,
-    list: ListContext?,
-    out: MutableList<LinearBlock>,
-    quoteId: String? = null,
-  ) {
-    for (nodeAny in nodes) {
-      val node = JsonMaps.mapOf(nodeAny)
-      when (JsonMaps.string(node["type"])) {
-        "paragraph" -> out.add(
-          parseTextBlock(
-            node,
-            if (list != null) list.kind else if (quoteId != null) LinearBlockKind.BLOCKQUOTE else LinearBlockKind.PARAGRAPH,
-            indent,
-            list,
-            quoteId,
-          ),
-        )
-        "heading" -> out.add(
-          parseTextBlock(node, LinearBlockKind.HEADING, indent, list, quoteId).copy(
-            headingLevel = JsonMaps.int(JsonMaps.mapOf(node["attrs"])["level"], 1).coerceIn(1, 6),
-          ),
-        )
-        "codeBlock" -> {
-          val parsed = parseTextBlock(node, LinearBlockKind.CODE_BLOCK, indent, list, quoteId)
-          out.add(
-            parsed.copy(
-              languageId = JsonMaps.string(JsonMaps.mapOf(node["attrs"])["languageId"]),
-              runs = parsed.runs.map { it.copy(marks = emptyList()) },
+    for (i in minOf(fromIndex, toIndex)..maxOf(fromIndex, toIndex)) {
+      val block = linear.blocks[i]
+      val lower = if (i == fromIndex) from.offsetUtf16 else 0
+      val upper = if (i == toIndex) to.offsetUtf16 else block.utf16Length
+      var offset = maxOf(0, minOf(lower, upper))
+      for (run in sliceRuns(block, lower, upper)) {
+        val length = run.utf16Length
+        val mark = run.marks.firstOrNull { it.type == type }
+        if (mark != null) {
+          operations.add(
+            SchemaOperation.AddMark(
+              SchemaSelection(block.textNodeId, offset, "after", from.revision),
+              SchemaSelection(block.textNodeId, offset + length, "before", from.revision),
+              mark,
             ),
           )
         }
-        "blockquote" -> {
-          val id = JsonMaps.string(node["id"])
-          val children = JsonMaps.listOf(node["content"])
-          if (children.isEmpty()) {
-            out.add(
-              LinearBlock(
-                kind = LinearBlockKind.BLOCKQUOTE,
-                nodeId = JotIds.deriveId(id, "paragraph", 0),
-                indent = list?.indent ?: indent,
-                listId = list?.listId,
-                listItemId = list?.itemId,
-                blockquoteId = id,
-              ),
-            )
-          } else {
-            flattenBlocks(children, indent, list, out, quoteId = id)
-          }
-        }
-        "bulletList" -> flattenList(node, indent, LinearBlockKind.BULLET_ITEM, out, quoteId)
-        "orderedList" -> flattenList(node, indent, LinearBlockKind.ORDERED_ITEM, out, quoteId)
-        "taskList" -> flattenList(node, indent, LinearBlockKind.TASK_ITEM, out, quoteId)
-        else -> out.add(
+        offset += length
+      }
+    }
+    return operations
+  }
+
+  // Tree to linear
+
+  private fun flatten(nodes: List<SchemaNode>, indent: Int, quoteChain: List<String>, into: MutableList<LinearBlock>) {
+    for (node in nodes) {
+      when (node.type) {
+        "paragraph" -> into.add(
+          LinearBlock(id = node.id, kind = LinearBlockKind.PARAGRAPH, indent = indent, runs = inlineRuns(node.content), quoteChain = quoteChain),
+        )
+        "heading" -> into.add(
           LinearBlock(
-            kind = LinearBlockKind.ATOMIC,
-            nodeId = JsonMaps.string(node["id"]),
+            id = node.id,
+            kind = LinearBlockKind.HEADING,
+            headingLevel = Json.int(node.attrs["level"]) ?: 1,
             indent = indent,
-            listId = list?.listId,
-            listItemId = list?.itemId,
-            blockquoteId = quoteId,
-            atomicNode = node,
-            attrs = JsonMaps.mapOf(node["attrs"]),
+            runs = inlineRuns(node.content),
+            quoteChain = quoteChain,
+          ),
+        )
+        "codeBlock" -> into.add(
+          LinearBlock(
+            id = node.id,
+            kind = LinearBlockKind.CODE_BLOCK,
+            indent = indent,
+            runs = node.content.map { LinearRun(if (it.type == "text") it.text ?: "" else it.plainText(), id = it.id) },
+            languageId = Json.str(node.attrs["languageId"]) ?: "",
+            quoteChain = quoteChain,
+          ),
+        )
+        "blockquote" -> flatten(node.content, indent, quoteChain + node.id, into)
+        "horizontalRule" -> into.add(
+          LinearBlock(
+            id = node.id,
+            kind = LinearBlockKind.HORIZONTAL_RULE,
+            indent = indent,
+            runs = listOf(LinearRun(OBJECT_REPLACEMENT, id = node.id, fallbackText = "divider")),
+            quoteChain = quoteChain,
+          ),
+        )
+        "image" -> into.add(
+          LinearBlock(
+            id = node.id,
+            kind = LinearBlockKind.IMAGE,
+            indent = indent,
+            runs = listOf(
+              LinearRun(OBJECT_REPLACEMENT, id = node.id, placeholderNode = node, fallbackText = Json.str(node.attrs["alt"]) ?: ""),
+            ),
+            quoteChain = quoteChain,
+            placeholderNode = node,
+          ),
+        )
+        "bulletList" -> flattenList(node, LinearBlockKind.BULLET_ITEM, indent, quoteChain, into)
+        "orderedList" -> flattenList(node, LinearBlockKind.ORDERED_ITEM, indent, quoteChain, into)
+        "taskList" -> flattenList(node, LinearBlockKind.TASK_ITEM, indent, quoteChain, into)
+        else -> into.add(
+          LinearBlock(
+            id = node.id,
+            kind = LinearBlockKind.PLACEHOLDER,
+            indent = indent,
+            runs = listOf(LinearRun(OBJECT_REPLACEMENT, id = node.id, placeholderNode = node, fallbackText = node.plainText())),
+            quoteChain = quoteChain,
+            placeholderNode = node,
           ),
         )
       }
@@ -822,391 +431,428 @@ internal object LinearModel {
   }
 
   private fun flattenList(
-    list: Map<String, Any?>,
-    indent: Int,
+    list: SchemaNode,
     kind: LinearBlockKind,
-    out: MutableList<LinearBlock>,
-    quoteId: String? = null,
+    indent: Int,
+    quoteChain: List<String>,
+    into: MutableList<LinearBlock>,
   ) {
-    val listId = JsonMaps.string(list["id"])
-    val start = JsonMaps.int(JsonMaps.mapOf(list["attrs"])["start"], 1).coerceAtLeast(1)
-    var index = start
-    for (itemAny in JsonMaps.listOf(list["content"])) {
-      val item = JsonMaps.mapOf(itemAny)
-      val itemId = JsonMaps.string(item["id"])
-      val checked = JsonMaps.int(JsonMaps.mapOf(item["attrs"])["checked"]) == 1
-      val ctx = ListContext(listId, itemId, kind, indent, start, index, checked)
-      val children = JsonMaps.listOf(item["content"])
-      var emitted = false
-      for (childAny in children) {
-        val child = JsonMaps.mapOf(childAny)
-        when (JsonMaps.string(child["type"])) {
-          "bulletList" -> flattenList(child, indent + 1, LinearBlockKind.BULLET_ITEM, out, quoteId)
-          "orderedList" -> flattenList(child, indent + 1, LinearBlockKind.ORDERED_ITEM, out, quoteId)
-          "taskList" -> flattenList(child, indent + 1, LinearBlockKind.TASK_ITEM, out, quoteId)
-          else -> {
-            flattenBlocks(listOf(child), indent, ctx, out, quoteId)
-            emitted = true
+    val start = Json.int(list.attrs["start"])
+    list.content.forEachIndexed { index, item ->
+      val runs = mutableListOf<LinearRun>()
+      var paragraphId: String? = null
+      val nested = mutableListOf<SchemaNode>()
+      for (child in item.content) {
+        when (child.type) {
+          "paragraph" -> {
+            if (paragraphId == null) {
+              paragraphId = child.id
+            } else {
+              runs.add(LinearRun("\n"))
+            }
+            runs.addAll(inlineRuns(child.content))
           }
+          "listItem", "taskItem" -> Unit
+          else -> nested.add(child)
         }
       }
-      if (!emitted) {
-        out.add(
-          LinearBlock(
-            kind = kind,
-            nodeId = itemId,
-            indent = indent,
-            listId = listId,
-            listItemId = itemId,
-            orderedStart = start,
-            orderedIndex = index,
-            checked = checked,
-            blockquoteId = quoteId,
-          ),
-        )
-      }
-      index += 1
-    }
-  }
-
-  private fun parseTextBlock(
-    node: Map<String, Any?>,
-    kind: LinearBlockKind,
-    indent: Int,
-    list: ListContext?,
-    quoteId: String? = null,
-  ): LinearBlock {
-    val (text, runs, atoms) = parseInlines(JsonMaps.listOf(node["content"]))
-    return LinearBlock(
-      kind = kind,
-      nodeId = JsonMaps.string(node["id"]),
-      indent = list?.indent ?: indent,
-      listId = list?.listId,
-      listItemId = list?.itemId,
-      orderedStart = list?.orderedStart ?: 1,
-      orderedIndex = list?.orderedIndex ?: 1,
-      checked = list?.checked ?: false,
-      blockquoteId = quoteId,
-      text = text,
-      runs = runs,
-      inlineAtoms = atoms,
-      attrs = JsonMaps.mapOf(node["attrs"]),
-    )
-  }
-
-  private fun parseInlines(content: List<Any?>): Triple<String, List<LinearRun>, List<LinearInlineAtom>> {
-    val text = StringBuilder()
-    val runs = mutableListOf<LinearRun>()
-    val atoms = mutableListOf<LinearInlineAtom>()
-    for (childAny in content) {
-      val node = JsonMaps.mapOf(childAny)
-      when (JsonMaps.string(node["type"])) {
-        "text" -> {
-          val value = JsonMaps.string(node["text"])
-          val start = text.length
-          text.append(value)
-          runs.add(
-            LinearRun(
-              textNodeId = JsonMaps.string(node["id"]),
-              startUtf16 = start,
-              endUtf16 = text.length,
-              marks = parseMarks(node["marks"]),
-            ),
-          )
-        }
-        else -> atoms.add(LinearInlineAtom(startUtf16 = text.length, node = node))
-      }
-    }
-    return Triple(text.toString(), runs, atoms)
-  }
-
-  private fun parseMarks(value: Any?): List<LinearMark> =
-    JsonMaps.listOf(value).map { item ->
-      val mark = JsonMaps.mapOf(item)
-      LinearMark(
-        type = JsonMaps.string(mark["type"]),
-        attrs = JsonMaps.mapOf(mark["attrs"]),
+      into.add(
+        LinearBlock(
+          id = item.id,
+          kind = kind,
+          listStart = if (index == 0) start else null,
+          checked = Json.int(item.attrs["checked"]),
+          indent = indent,
+          runs = runs,
+          paragraphId = paragraphId,
+          listId = list.id,
+          quoteChain = quoteChain,
+        ),
       )
+      flatten(nested, indent + 1, quoteChain, into)
+    }
+  }
+
+  private fun inlineRuns(nodes: List<SchemaNode>): List<LinearRun> =
+    nodes.map { node ->
+      when (node.type) {
+        "text" -> LinearRun(node.text ?: "", node.marks, node.id)
+        "hardBreak" -> LinearRun(LINE_SEPARATOR, id = node.id)
+        else -> LinearRun(OBJECT_REPLACEMENT, id = node.id, placeholderNode = node, fallbackText = node.plainText())
+      }
     }
 
-  private fun consumeBlockquote(blocks: List<LinearBlock>, start: Int): Pair<Map<String, Any?>, Int> {
-    val first = blocks[start]
-    val quoteId = first.blockquoteId ?: JotIds.createId()
-    val inner = mutableListOf<Map<String, Any?>>()
+  // Linear to tree
+
+  private fun nestBlocks(
+    blocks: List<LinearBlock>,
+    start: Int,
+    minIndent: Int,
+    minQuote: Int = 0,
+    expectedQuote: String? = null,
+  ): Pair<List<SchemaNode>, Int> {
+    val nodes = mutableListOf<SchemaNode>()
     var i = start
     while (i < blocks.size) {
       val block = blocks[i]
-      if (block.blockquoteId != quoteId) {
+      if (block.indent < minIndent) {
         break
       }
-      if (isListKind(block.kind)) {
-        val (listNode, consumed) = consumeList(blocks, i, minIndent = block.indent)
-        inner.add(listNode)
-        i += consumed
-      } else {
-        val emitted = when (block.kind) {
-          LinearBlockKind.BLOCKQUOTE -> block.copy(kind = LinearBlockKind.PARAGRAPH, blockquoteId = null)
-          else -> block.copy(blockquoteId = null)
+      if (expectedQuote != null) {
+        if (block.quoteChain.size < minQuote) {
+          break
         }
-        inner.add(textContainerNode(emitted))
+        if (minQuote > 0 && block.quoteChain[minQuote - 1] != expectedQuote) {
+          break
+        }
+      } else if (minQuote > 0 && block.quoteChain.size < minQuote) {
+        break
+      }
+      if (block.quoteChain.size > minQuote) {
+        val quoteId = block.quoteChain[minQuote]
+        val parsed = nestBlocks(blocks, i, minIndent, minQuote + 1, quoteId)
+        nodes.add(SchemaNode(type = "blockquote", id = quoteId, content = parsed.first))
+        i = parsed.second
+        continue
+      }
+      if (isListKind(block.kind)) {
+        val parsed = parseList(blocks, i, block.indent, block.kind, minQuote, expectedQuote)
+        nodes.add(parsed.first)
+        i = parsed.second
+      } else {
+        nodes.add(blockToNode(block))
         i += 1
       }
     }
-    return mapOf(
-      "type" to "blockquote",
-      "id" to quoteId,
-      "content" to inner,
-    ) to (i - start)
+    return nodes to i
   }
 
-  private fun consumeList(blocks: List<LinearBlock>, start: Int, minIndent: Int): Pair<Map<String, Any?>, Int> {
+  private fun parseList(
+    blocks: List<LinearBlock>,
+    start: Int,
+    indent: Int,
+    kind: LinearBlockKind,
+    minQuote: Int,
+    expectedQuote: String?,
+  ): Pair<SchemaNode, Int> {
     val first = blocks[start]
-    val listType = when (first.kind) {
-      LinearBlockKind.ORDERED_ITEM -> "orderedList"
+    val listId = first.listId ?: JotIds.createId()
+    val items = mutableListOf<SchemaNode>()
+    var i = start
+    var listStart = first.listStart
+    while (i < blocks.size) {
+      val block = blocks[i]
+      if (block.indent < indent) {
+        break
+      }
+      if (block.quoteChain.size != minQuote) {
+        break
+      }
+      if (expectedQuote != null && minQuote > 0 && block.quoteChain[minQuote - 1] != expectedQuote) {
+        break
+      }
+      if (block.indent == indent && (block.kind != kind || (block.listId != null && first.listId != null && block.listId != first.listId))) {
+        break
+      }
+      if (block.indent > indent) {
+        break
+      }
+      if (listStart == null) {
+        listStart = block.listStart
+      }
+      i += 1
+      val nested = nestBlocks(blocks, i, indent + 1, minQuote, expectedQuote)
+      i = nested.second
+      items.add(itemNode(block, nested.first))
+    }
+    val attrs = mutableMapOf<String, Any?>()
+    val listType = when (kind) {
+      LinearBlockKind.ORDERED_ITEM -> {
+        attrs["start"] = listStart ?: 1
+        "orderedList"
+      }
       LinearBlockKind.TASK_ITEM -> "taskList"
       else -> "bulletList"
     }
-    val itemType = if (first.kind == LinearBlockKind.TASK_ITEM) "taskItem" else "listItem"
-    val items = mutableListOf<Map<String, Any?>>()
-    var i = start
-    while (i < blocks.size) {
-      val block = blocks[i]
-      if (!isListKind(block.kind) || block.indent < minIndent) {
-        break
-      }
-      if (block.indent > minIndent) {
-        break
-      }
-      if (block.kind != first.kind) {
-        break
-      }
-      if (first.listId != null && block.listId != null && block.listId != first.listId) {
-        break
-      }
-      if (first.blockquoteId != null && block.blockquoteId != first.blockquoteId) {
-        break
-      }
-      val itemId = block.listItemId ?: block.nodeId
-      val children = mutableListOf<Map<String, Any?>>()
-      while (i < blocks.size && blocks[i].indent == minIndent && (blocks[i].listItemId ?: blocks[i].nodeId) == itemId) {
-        children.add(textContainerNode(blocks[i].copy(kind = LinearBlockKind.PARAGRAPH, listId = null, listItemId = null)))
-        i += 1
-      }
-      if (i < blocks.size && isListKind(blocks[i].kind) && blocks[i].indent > minIndent) {
-        val (nested, consumed) = consumeList(blocks, i, blocks[i].indent)
-        children.add(nested)
-        i += consumed
-      }
-      val item = mutableMapOf<String, Any?>(
-        "type" to itemType,
-        "id" to itemId,
-        "content" to children,
-      )
-      if (itemType == "taskItem") {
-        item["attrs"] = mapOf("checked" to if (block.checked) 1 else 0)
-      }
-      items.add(item)
-    }
-    val list = mutableMapOf<String, Any?>(
-      "type" to listType,
-      "id" to (first.listId ?: JotIds.createId()),
-      "content" to items,
+    return SchemaNode(type = listType, id = listId, attrs = attrs, content = items) to i
+  }
+
+  private fun itemNode(block: LinearBlock, nested: List<SchemaNode>): SchemaNode {
+    val paragraph = SchemaNode(
+      type = "paragraph",
+      id = block.paragraphId ?: JotIds.deriveId(block.id, "paragraph", 0),
+      content = runsToInlines(block.runs),
     )
-    if (listType == "orderedList") {
-      list["attrs"] = mapOf("start" to first.orderedStart)
-    }
-    return list to (i - start)
-  }
-
-  private fun textContainerNode(block: LinearBlock): Map<String, Any?> {
-    if (block.kind == LinearBlockKind.ATOMIC) {
-      return block.atomicNode ?: mapOf("type" to "paragraph", "id" to block.nodeId, "content" to emptyList<Any>())
-    }
-    val content = inlinesToContent(block)
-    return when (block.kind) {
-      LinearBlockKind.HEADING -> mapOf(
-        "type" to "heading",
-        "id" to block.nodeId,
-        "attrs" to mapOf("level" to block.headingLevel),
-        "content" to content,
-      )
-      LinearBlockKind.CODE_BLOCK -> {
-        val node = mutableMapOf<String, Any?>(
-          "type" to "codeBlock",
-          "id" to block.nodeId,
-          "content" to content,
-        )
-        if (block.languageId.isNotEmpty()) {
-          node["attrs"] = mapOf("languageId" to block.languageId)
-        }
-        node
-      }
-      LinearBlockKind.BLOCKQUOTE -> mapOf(
-        "type" to "paragraph",
-        "id" to block.nodeId,
-        "content" to content,
-      )
-      else -> mapOf(
-        "type" to "paragraph",
-        "id" to block.nodeId,
-        "content" to content,
-      )
-    }
-  }
-
-  private fun inlinesToContent(block: LinearBlock): List<Map<String, Any?>> {
-    val atoms = block.inlineAtoms.sortedBy { it.startUtf16 }
-    val content = mutableListOf<Map<String, Any?>>()
-    var cursor = 0
-    val runs = if (block.runs.isEmpty() && block.text.isNotEmpty()) {
-      listOf(LinearRun(JotIds.deriveId(block.nodeId, "text", 0), 0, block.text.length, emptyList()))
+    return if (block.kind == LinearBlockKind.TASK_ITEM) {
+      SchemaNode(type = "taskItem", id = block.id, attrs = mapOf("checked" to (block.checked ?: 0)), content = listOf(paragraph) + nested)
     } else {
-      block.runs
+      SchemaNode(type = "listItem", id = block.id, content = listOf(paragraph) + nested)
     }
-    fun emitText(from: Int, to: Int) {
-      if (from >= to) {
-        return
-      }
-      var cursor = from
-      val covering = runs.filter { it.endUtf16 > from && it.startUtf16 < to }.sortedBy { it.startUtf16 }
-      if (covering.isEmpty()) {
-        content.add(
-          mapOf(
-            "type" to "text",
-            "id" to JotIds.deriveId(block.nodeId, "text", from),
-            "text" to block.text.substring(from, to),
-            "marks" to emptyList<Map<String, Any?>>(),
-          ),
-        )
-        return
-      }
-      for (run in covering) {
-        val start = maxOf(run.startUtf16, from)
-        val end = minOf(run.endUtf16, to)
-        if (cursor < start) {
-          content.add(
-            mapOf(
-              "type" to "text",
-              "id" to JotIds.deriveId(block.nodeId, "text", cursor),
-              "text" to block.text.substring(cursor, start),
-              "marks" to emptyList<Map<String, Any?>>(),
-            ),
-          )
-        }
-        content.add(
-          mapOf(
-            "type" to "text",
-            "id" to run.textNodeId,
-            "text" to block.text.substring(start, end),
-            "marks" to run.marks.map { markToMap(it) },
-          ),
-        )
-        cursor = end
-      }
-      if (cursor < to) {
-        content.add(
-          mapOf(
-            "type" to "text",
-            "id" to JotIds.deriveId(block.nodeId, "text", cursor),
-            "text" to block.text.substring(cursor, to),
-            "marks" to emptyList<Map<String, Any?>>(),
-          ),
-        )
-      }
-    }
-    for (atom in atoms) {
-      val at = atom.startUtf16.coerceIn(0, block.text.length)
-      emitText(cursor, at)
-      content.add(atom.node)
-      cursor = at
-    }
-    emitText(cursor, block.text.length)
-    return content
   }
 
-  private fun replaceRuns(
-    block: LinearBlock,
-    start: Int,
-    end: Int,
-    inserted: String,
-    marks: List<LinearMark>,
-  ): List<LinearRun> {
-    val delta = inserted.length - (end - start)
-    val kept = mutableListOf<LinearRun>()
-    for (run in block.runs) {
+  private fun blockToNode(block: LinearBlock): SchemaNode =
+    when (block.kind) {
+      LinearBlockKind.HEADING -> SchemaNode(
+        type = "heading",
+        id = block.id,
+        attrs = mapOf("level" to (block.headingLevel ?: 1)),
+        content = runsToInlines(block.runs),
+      )
+      LinearBlockKind.CODE_BLOCK -> SchemaNode(
+        type = "codeBlock",
+        id = block.id,
+        attrs = mapOf("languageId" to (block.languageId ?: "")),
+        content = runsToText(block.runs, block.id),
+      )
+      LinearBlockKind.PLACEHOLDER ->
+        block.placeholderNode ?: SchemaNode(type = "paragraph", id = block.id, content = runsToInlines(block.runs))
+      LinearBlockKind.HORIZONTAL_RULE -> SchemaNode(type = "horizontalRule", id = block.id)
+      LinearBlockKind.IMAGE -> block.placeholderNode ?: SchemaNode(
+        type = "image",
+        id = block.id,
+        attrs = mapOf(
+          "attachmentId" to (block.runs.firstOrNull()?.id ?: block.id),
+          "widthBasisPoints" to 10000,
+          "alt" to block.plainText,
+        ),
+      )
+      else -> SchemaNode(type = "paragraph", id = block.id, content = runsToInlines(block.runs))
+    }
+
+  private fun runsToInlines(runs: List<LinearRun>): List<SchemaNode> =
+    runs.map { run ->
       when {
-        run.endUtf16 <= start -> kept.add(run)
-        run.startUtf16 >= end -> kept.add(run.copy(startUtf16 = run.startUtf16 + delta, endUtf16 = run.endUtf16 + delta))
-        else -> {
-          if (run.startUtf16 < start) {
-            kept.add(run.copy(endUtf16 = start))
-          }
-          if (run.endUtf16 > end) {
-            kept.add(
-              run.copy(
-                startUtf16 = start + inserted.length,
-                endUtf16 = run.endUtf16 + delta,
-              ),
-            )
-          }
-        }
+        run.placeholderNode != null -> run.placeholderNode
+        run.text == LINE_SEPARATOR -> SchemaNode(type = "hardBreak", id = run.id ?: JotIds.createId())
+        else -> SchemaNode(type = "text", id = run.id ?: JotIds.createId(), text = run.text, marks = run.marks)
       }
     }
-    if (inserted.isNotEmpty()) {
-      val parent = block.nodeId
-      kept.add(
-        LinearRun(
-          textNodeId = JotIds.deriveId(parent, "text", start),
-          startUtf16 = start,
-          endUtf16 = start + inserted.length,
-          marks = marks,
+
+  private fun runsToText(runs: List<LinearRun>, parentId: String): List<SchemaNode> {
+    val text = runs.joinToString("") { it.text }
+    if (text.isEmpty()) {
+      return emptyList()
+    }
+    return listOf(
+      SchemaNode(type = "text", id = runs.firstOrNull()?.id ?: JotIds.deriveId(parentId, "text", 0), text = text),
+    )
+  }
+
+  // Edits
+
+  private fun replaceBlock(linear: LinearDocument, index: Int, block: LinearBlock): LinearDocument =
+    linear.copy(blocks = linear.blocks.toMutableList().also { it[index] = block })
+
+  private fun insertText(text: String, position: SchemaSelection, marks: List<LinearMark>, linear: LinearDocument): LinearDocument {
+    if (linear.blocks.isEmpty()) {
+      val targetsRoot = position.nodeId.isEmpty() || position.nodeId == linear.id
+      return linear.copy(
+        blocks = listOf(
+          LinearBlock(
+            id = if (targetsRoot) bodyParagraphId(linear.id) else position.nodeId,
+            kind = LinearBlockKind.PARAGRAPH,
+            runs = listOf(LinearRun(text, marks, JotIds.createId())),
+          ),
         ),
       )
     }
-    return kept.sortedBy { it.startUtf16 }
+    val index = indexOfBlock(position.nodeId, linear) ?: return linear
+    val block = linear.blocks[index]
+    return replaceBlock(linear, index, block.copy(runs = insert(text, position.offsetUtf16, marks, block.runs)))
   }
 
-  private fun displayToSchema(layout: BlockDisplay, block: LinearBlock, displayOffset: Int): Int {
-    val local = (displayOffset - layout.textStart).coerceAtLeast(0)
-    var schema = 0
-    var display = 0
-    var atomIndex = 0
-    while (display < local && schema < block.text.length) {
-      if (atomIndex < layout.atomDisplay.size && layout.atomDisplay[atomIndex] - layout.textStart == display) {
-        display += 1
-        atomIndex += 1
+  private fun insert(text: String, offset: Int, marks: List<LinearMark>, source: List<LinearRun>): List<LinearRun> {
+    val runs = source.toMutableList()
+    if (runs.isEmpty()) {
+      runs.add(LinearRun(text, marks, JotIds.createId()))
+      return runs
+    }
+    var remaining = maxOf(0, offset)
+    for (i in runs.indices) {
+      val run = runs[i]
+      if (run.isPlaceholder) {
+        if (remaining == 0) {
+          runs.add(i, LinearRun(text, marks, JotIds.createId()))
+          return runs
+        }
+        remaining -= 1
         continue
       }
-      schema += 1
-      display += 1
+      val length = run.text.length
+      if (remaining <= length) {
+        if (marksEqual(run.marks, marks)) {
+          runs[i] = run.copy(text = Utf16.insert(run.text, remaining, text))
+        } else {
+          val left = Utf16.slice(run.text, 0, remaining)
+          val right = Utf16.slice(run.text, remaining, length - remaining)
+          val next = mutableListOf<LinearRun>()
+          if (left.isNotEmpty()) {
+            next.add(LinearRun(left, run.marks, run.id))
+          }
+          next.add(LinearRun(text, marks, JotIds.createId()))
+          if (right.isNotEmpty()) {
+            next.add(LinearRun(right, run.marks, JotIds.createId()))
+          }
+          runs.removeAt(i)
+          runs.addAll(i, next)
+        }
+        return runs
+      }
+      remaining -= length
     }
-    return schema.coerceIn(0, block.text.length)
+    runs.add(LinearRun(text, marks, JotIds.createId()))
+    return runs
   }
 
-  private fun schemaToDisplay(layout: BlockDisplay, block: LinearBlock, schemaOffset: Int): Int {
-    val offset = schemaOffset.coerceIn(0, block.text.length)
-    val atomsBefore = block.inlineAtoms.count { it.startUtf16 < offset } +
-      block.inlineAtoms.count { it.startUtf16 == offset }
-    return layout.textStart + offset + atomsBefore.coerceAtMost(block.inlineAtoms.size)
+  private fun deleteRange(from: SchemaSelection, to: SchemaSelection, linear: LinearDocument): LinearDocument {
+    val fromIndex = indexOfBlock(from.nodeId, linear) ?: return linear
+    val toIndex = indexOfBlock(to.nodeId, linear) ?: return linear
+    if (fromIndex == toIndex) {
+      val block = linear.blocks[fromIndex]
+      return replaceBlock(linear, fromIndex, block.copy(runs = deleteText(from.offsetUtf16, to.offsetUtf16, block.runs)))
+    }
+    val start = minOf(fromIndex, toIndex)
+    val end = maxOf(fromIndex, toIndex)
+    val startOffset = if (fromIndex <= toIndex) from.offsetUtf16 else to.offsetUtf16
+    val endOffset = if (fromIndex <= toIndex) to.offsetUtf16 else from.offsetUtf16
+    val head = linear.blocks[start]
+    val tail = linear.blocks[end]
+    val merged = deleteText(startOffset, head.utf16Length, head.runs) + deleteText(0, endOffset, tail.runs)
+    val blocks = linear.blocks.toMutableList()
+    blocks[start] = head.copy(runs = merged)
+    blocks.subList(start + 1, end + 1).clear()
+    return linear.copy(blocks = blocks)
   }
 
-  internal fun isListKind(kind: LinearBlockKind): Boolean =
-    kind == LinearBlockKind.BULLET_ITEM ||
-      kind == LinearBlockKind.ORDERED_ITEM ||
-      kind == LinearBlockKind.TASK_ITEM
-
-  internal fun isQuoted(block: LinearBlock): Boolean =
-    block.kind == LinearBlockKind.BLOCKQUOTE || block.blockquoteId != null
-
-  internal fun blockKind(name: String): LinearBlockKind =
-    when (name) {
-      "HEADING", "heading" -> LinearBlockKind.HEADING
-      "CODE_BLOCK", "codeBlock" -> LinearBlockKind.CODE_BLOCK
-      "BLOCKQUOTE", "blockquote" -> LinearBlockKind.BLOCKQUOTE
-      "BULLET_ITEM", "bulletList", "bulletItem", "bullet" -> LinearBlockKind.BULLET_ITEM
-      "ORDERED_ITEM", "orderedList", "orderedItem", "ordered" -> LinearBlockKind.ORDERED_ITEM
-      "TASK_ITEM", "taskList", "taskItem", "task" -> LinearBlockKind.TASK_ITEM
-      "ATOMIC" -> LinearBlockKind.ATOMIC
-      else -> LinearBlockKind.PARAGRAPH
+  private fun deleteText(from: Int, to: Int, runs: List<LinearRun>): List<LinearRun> {
+    val start = maxOf(0, minOf(from, to))
+    val end = maxOf(from, to)
+    var offset = 0
+    val next = mutableListOf<LinearRun>()
+    for (run in runs) {
+      val length = run.utf16Length
+      val runStart = offset
+      val runEnd = offset + length
+      offset = runEnd
+      if (runEnd <= start || runStart >= end) {
+        next.add(run)
+        continue
+      }
+      if (run.isPlaceholder) {
+        continue
+      }
+      val keepLeft = maxOf(0, start - runStart)
+      val keepRight = maxOf(0, runEnd - end)
+      val left = Utf16.slice(run.text, 0, keepLeft)
+      val right = Utf16.slice(run.text, length - keepRight, keepRight)
+      if (left.isNotEmpty()) {
+        next.add(LinearRun(left, run.marks, run.id))
+      }
+      if (right.isNotEmpty()) {
+        next.add(LinearRun(right, run.marks, JotIds.createId()))
+      }
     }
+    return next
+  }
+
+  private fun applyMark(mark: LinearMark, from: SchemaSelection, to: SchemaSelection, add: Boolean, linear: LinearDocument): LinearDocument {
+    val fromIndex = indexOfBlock(from.nodeId, linear) ?: return linear
+    val toIndex = indexOfBlock(to.nodeId, linear) ?: return linear
+    val blocks = linear.blocks.toMutableList()
+    for (i in minOf(fromIndex, toIndex)..maxOf(fromIndex, toIndex)) {
+      val startOffset = if (i == fromIndex) from.offsetUtf16 else 0
+      val endOffset = if (i == toIndex) to.offsetUtf16 else blocks[i].utf16Length
+      blocks[i] = blocks[i].copy(runs = markRuns(blocks[i].runs, startOffset, endOffset, mark, add))
+    }
+    return linear.copy(blocks = blocks)
+  }
+
+  private fun markRuns(runs: List<LinearRun>, from: Int, to: Int, mark: LinearMark, add: Boolean): List<LinearRun> {
+    val start = maxOf(0, minOf(from, to))
+    val end = maxOf(from, to)
+    var offset = 0
+    val next = mutableListOf<LinearRun>()
+    for (run in runs) {
+      val length = run.utf16Length
+      val runStart = offset
+      val runEnd = offset + length
+      offset = runEnd
+      if (run.isPlaceholder || runEnd <= start || runStart >= end) {
+        next.add(run)
+        continue
+      }
+      val leftLen = maxOf(0, start - runStart)
+      val rightLen = maxOf(0, runEnd - end)
+      val midLen = length - leftLen - rightLen
+      if (leftLen > 0) {
+        next.add(LinearRun(Utf16.slice(run.text, 0, leftLen), run.marks, run.id))
+      }
+      if (midLen > 0) {
+        val marks = run.marks.filter { it.type != mark.type } + (if (add) listOf(mark) else emptyList())
+        next.add(LinearRun(Utf16.slice(run.text, leftLen, midLen), marks, JotIds.createId()))
+      }
+      if (rightLen > 0) {
+        next.add(LinearRun(Utf16.slice(run.text, length - rightLen, rightLen), run.marks, JotIds.createId()))
+      }
+    }
+    return next
+  }
+
+  private fun setAttributes(nodeId: String, patch: Map<String, Any?>, linear: LinearDocument): LinearDocument {
+    val index = indexOfBlock(nodeId, linear) ?: return linear
+    var block = linear.blocks[index]
+    Json.int(patch["checked"])?.let { block = block.copy(checked = it) }
+    Json.int(patch["level"])?.let { level ->
+      block = block.copy(
+        headingLevel = level,
+        kind = if (block.kind == LinearBlockKind.PARAGRAPH) LinearBlockKind.HEADING else block.kind,
+      )
+    }
+    Json.str(patch["languageId"])?.let { block = block.copy(languageId = it) }
+    val node = block.placeholderNode
+    if (block.kind == LinearBlockKind.IMAGE && node != null) {
+      val attrs = node.attrs.toMutableMap()
+      for (key in listOf("widthBasisPoints", "alt")) {
+        if (patch.containsKey(key)) {
+          attrs[key] = patch[key]
+        }
+      }
+      val updated = node.copy(attrs = attrs)
+      block = block.copy(
+        placeholderNode = updated,
+        runs = listOf(
+          LinearRun(OBJECT_REPLACEMENT, id = updated.id, placeholderNode = updated, fallbackText = Json.str(updated.attrs["alt"]) ?: ""),
+        ),
+      )
+    }
+    return replaceBlock(linear, index, block)
+  }
+
+  private fun insertNode(node: SchemaNode, parentId: String, index: Int, tree: SchemaNode): SchemaNode {
+    if (tree.id == parentId) {
+      val content = tree.content.toMutableList()
+      content.add(index.coerceIn(0, content.size), node)
+      return tree.copy(content = content)
+    }
+    return tree.copy(content = tree.content.map { insertNode(node, parentId, index, it) })
+  }
+
+  private fun deleteNode(nodeId: String, tree: SchemaNode): SchemaNode =
+    tree.copy(content = tree.content.filter { it.id != nodeId }.map { deleteNode(nodeId, it) })
+
+  private fun marksEqual(left: List<LinearMark>, right: List<LinearMark>): Boolean =
+    left.size == right.size && left.sortedBy { it.type } == right.sortedBy { it.type }
+
+  private fun firstMarks(slice: List<SchemaNode>): List<LinearMark> {
+    for (node in slice) {
+      if (node.type == "text") {
+        return node.marks
+      }
+      val nested = firstMarks(node.content)
+      if (nested.isNotEmpty()) {
+        return nested
+      }
+    }
+    return emptyList()
+  }
 }

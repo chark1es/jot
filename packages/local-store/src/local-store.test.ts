@@ -101,6 +101,8 @@ describe('@jot/local-store', () => {
     const noteId = await store.createNote({ title: 'Hello' });
     const before = await store.getNoteDocument(noteId);
     expect(before?.title).toBe('Hello');
+    expect(before?.document.content).toHaveLength(1);
+    expect(before?.document.content[0]?.type).toBe('paragraph');
     expect(before).not.toBeNull();
     if (before === null) {
       return;

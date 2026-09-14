@@ -58,6 +58,7 @@ export type {
   VaultId,
 } from "./ids.js";
 export { INPUT_RULES } from "./input-rules.js";
+export { utf8Decode, utf8Encode } from "./utf8.js";
 export type { InputRule, InputRuleTerminator } from "./input-rules.js";
 export { migrate } from "./migrate.js";
 export {

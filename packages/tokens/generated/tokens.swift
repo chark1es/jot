@@ -8,6 +8,16 @@ public enum JotTokens {
                 public static let android: String = "Roboto"
                 public static let windows: String = "Segoe UI"
             }
+            public enum Size {
+                public static let largeTitle: Double = 34
+                public static let title: Double = 17
+                public static let body: Double = 17
+                public static let subhead: Double = 15
+                public static let footnote: Double = 13
+                public static let caption: Double = 12
+                public static let desktop: Double = 13
+                public static let desktopSecondary: Double = 11
+            }
         }
         public enum Editor {
             public enum FontFamily {
@@ -45,37 +55,37 @@ public enum JotTokens {
     }
     public enum Color {
         public enum Light {
-            public static let canvas: String = "#f4f0e7"
-            public static let surface: String = "#ebe6db"
-            public static let ink: String = "#1a1814"
-            public static let inkMuted: String = "#5e584f"
-            public static let inkFaint: String = "#8c857a"
-            public static let hairline: String = "#d6cfc2"
-            public static let accent: String = "#b4681a"
-            public static let accentMuted: String = "#e6d3b3"
+            public static let canvas: String = "#f6f5f1"
+            public static let surface: String = "#eceae4"
+            public static let ink: String = "#1a1916"
+            public static let inkMuted: String = "#534f48"
+            public static let inkFaint: String = "#68635b"
+            public static let hairline: String = "#d5d1c8"
+            public static let accent: String = "#2e4a63"
+            public static let accentMuted: String = "#d7dee6"
             public static let error: String = "#9c2f2a"
-            public static let warning: String = "#9a5a10"
+            public static let warning: String = "#8a5510"
             public static let success: String = "#2c6844"
-            public static let selection: String = "#e6d3b3"
-            public static let focus: String = "#b4681a"
-            public static let link: String = "#8a4c12"
+            public static let selection: String = "#d7dee6"
+            public static let focus: String = "#2e4a63"
+            public static let link: String = "#2e4a63"
             public static let sync: String = "#3c6758"
         }
         public enum Dark {
-            public static let canvas: String = "#12110f"
-            public static let surface: String = "#1b1a17"
-            public static let ink: String = "#ece8e0"
-            public static let inkMuted: String = "#a49c92"
-            public static let inkFaint: String = "#706960"
-            public static let hairline: String = "#2e2c28"
-            public static let accent: String = "#d0913a"
-            public static let accentMuted: String = "#3a2c18"
+            public static let canvas: String = "#1c1b19"
+            public static let surface: String = "#121211"
+            public static let ink: String = "#eceae4"
+            public static let inkMuted: String = "#a8a39a"
+            public static let inkFaint: String = "#908b82"
+            public static let hairline: String = "#2f2e2a"
+            public static let accent: String = "#9eb6c9"
+            public static let accentMuted: String = "#243444"
             public static let error: String = "#e27470"
             public static let warning: String = "#d4a054"
             public static let success: String = "#73b88c"
-            public static let selection: String = "#3a2c18"
-            public static let focus: String = "#d0913a"
-            public static let link: String = "#e0b16c"
+            public static let selection: String = "#243444"
+            public static let focus: String = "#9eb6c9"
+            public static let link: String = "#b7c9d8"
             public static let sync: String = "#7a9e8e"
         }
     }

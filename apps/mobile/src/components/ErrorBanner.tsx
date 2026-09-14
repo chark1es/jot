@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { tokens } from '@jot/tokens/generated';
 import type { SemanticPalette } from '@jot/ui-mobile';
-import { editorBodySize, touchMin, uiFontFamily } from '../theme';
+import { pressedStyle, touchMin, typeSize, uiFontFamily } from '../theme';
 
 type Props = {
   readonly palette: SemanticPalette;
@@ -12,14 +12,19 @@ type Props = {
 
 export function ErrorBanner({ palette, message, actionLabel, onAction }: Props) {
   return (
-    <View style={[styles.box, { backgroundColor: palette.surface, borderColor: palette.error }]}>
+    <View
+      style={[
+        styles.box,
+        { backgroundColor: palette.surface, borderBottomColor: palette.hairline },
+      ]}
+    >
       <Text style={[styles.text, { color: palette.error, fontFamily: uiFontFamily() }]}>{message}</Text>
       {actionLabel !== undefined && onAction !== undefined ? (
         <Pressable
           onPress={onAction}
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
-          style={styles.action}
+          style={({ pressed }) => [styles.action, pressedStyle(pressed)]}
         >
           <Text style={[styles.actionLabel, { color: palette.accent, fontFamily: uiFontFamily() }]}>
             {actionLabel}
@@ -32,22 +37,20 @@ export function ErrorBanner({ palette, message, actionLabel, onAction }: Props) 
 
 const styles = StyleSheet.create({
   box: {
-    marginHorizontal: tokens.spacing.scale.space16,
-    marginTop: tokens.spacing.scale.space8,
-    padding: tokens.spacing.scale.space12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: tokens.radius.compact,
-    gap: tokens.spacing.scale.space8,
+    paddingHorizontal: tokens.spacing.scale.space16,
+    paddingVertical: tokens.spacing.scale.space12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: tokens.spacing.scale.space4,
   },
   text: {
-    fontSize: editorBodySize,
+    fontSize: typeSize.subhead,
   },
   action: {
     minHeight: touchMin,
     justifyContent: 'center',
   },
   actionLabel: {
-    fontSize: editorBodySize,
+    fontSize: typeSize.subhead,
     fontWeight: '600',
   },
 });

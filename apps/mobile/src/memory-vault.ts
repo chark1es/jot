@@ -158,7 +158,11 @@ export class MemoryVault {
         try {
           this.documents.set(id, parseDocument(document));
         } catch {
-          this.documents.set(id, emptyDocument());
+          try {
+            this.documents.set(id, emptyDocument(parseId(id)));
+          } catch {
+            this.documents.set(id, emptyDocument());
+          }
         }
       }
     }
@@ -183,7 +187,7 @@ export class MemoryVault {
   createNote(folderId: FolderId | null, clock: DeviceClockState): { noteId: NoteId; clock: DeviceClockState } {
     const ticked = tickClock(clock);
     const noteId = createId<NoteId>();
-    const document = emptyDocument();
+    const document = emptyDocument(noteId);
     const note: VaultNote = {
       id: noteId,
       title: '',
@@ -229,24 +233,24 @@ export class MemoryVault {
       if (note.id !== command.noteId) {
         return note;
       }
+      // Only renaming changes the edited time the list shows; the rest is organization.
       switch (command.type) {
         case 'renameTitle':
           return { ...note, title: command.title, modifiedMs: ticked.clock.wallMs };
         case 'pin':
-          return { ...note, pinned: command.pinned, modifiedMs: ticked.clock.wallMs };
+          return { ...note, pinned: command.pinned };
         case 'archive':
           return {
             ...note,
             archived: command.archived,
             trashed: command.archived ? false : note.trashed,
-            modifiedMs: ticked.clock.wallMs,
           };
         case 'trash':
-          return { ...note, trashed: true, archived: false, modifiedMs: ticked.clock.wallMs };
+          return { ...note, trashed: true, archived: false };
         case 'restore':
-          return { ...note, trashed: false, archived: false, modifiedMs: ticked.clock.wallMs };
+          return { ...note, trashed: false, archived: false };
         case 'move':
-          return { ...note, folderId: command.folderId, modifiedMs: ticked.clock.wallMs };
+          return { ...note, folderId: command.folderId };
         case 'tag': {
           const has = note.tagIds.includes(command.tagId);
           const tagIds =
@@ -255,7 +259,7 @@ export class MemoryVault {
                 ? note.tagIds
                 : [...note.tagIds, command.tagId]
               : note.tagIds.filter((id) => id !== command.tagId);
-          return { ...note, tagIds, modifiedMs: ticked.clock.wallMs };
+          return { ...note, tagIds };
         }
         case 'create':
           return note;

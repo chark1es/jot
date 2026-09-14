@@ -247,6 +247,63 @@ export class HeadlessEditorHost implements EditorHost {
       this.unsetLink(selection);
       return;
     }
+    const findNode = (node: SchemaNode, id: string): SchemaNode | undefined => {
+      if (node.id === id) {
+        return node;
+      }
+      for (const child of node.content) {
+        const found = findNode(child, id);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+      return undefined;
+    };
+    if (command.name === 'setImageWidth') {
+      const image = findNode(doc, command.nodeId);
+      if (image?.type !== 'image') {
+        return;
+      }
+      const prior = image.attrs.widthBasisPoints ?? 10000;
+      const next = Math.min(10000, Math.max(2000, Math.round(command.widthBasisPoints)));
+      if (next === prior) {
+        return;
+      }
+      await this.commit(
+        [
+          {
+            type: 'setNodeAttributes',
+            nodeId: image.id,
+            patch: { widthBasisPoints: next },
+            priorValues: { widthBasisPoints: prior },
+          },
+        ],
+        'local',
+      );
+      return;
+    }
+    if (command.name === 'removeBlock') {
+      const target = findNode(doc, command.nodeId);
+      if (target === undefined || target.id === doc.id) {
+        return;
+      }
+      await this.commit([{ type: 'deleteNode', nodeId: target.id, deletedNode: target }], 'local');
+      return;
+    }
+    if (command.name === 'insertBlocks') {
+      const top = doc.content.findIndex((child) => findNode(child, selection.nodeId) !== undefined);
+      const index = top === -1 ? doc.content.length : top + 1;
+      await this.commit(
+        command.nodes.map((node, offset) => ({
+          type: 'insertNode' as const,
+          parentId: doc.id,
+          index: index + offset,
+          node,
+        })),
+        'local',
+      );
+      return;
+    }
     const block = selectionBlock(doc, selection);
     switch (command.name) {
       case 'setHeading':

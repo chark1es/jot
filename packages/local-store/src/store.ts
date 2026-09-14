@@ -12,6 +12,7 @@ import type {
   ListNotesQuery,
   NoteCommand,
   NoteDocument,
+  NoteHistory,
   NoteListItem,
   NoteProjection,
   RestoreVersionResult,
@@ -75,6 +76,20 @@ export interface LocalStore {
   removeTagFromNote(noteId: NoteId, tagId: TagId): Promise<void>;
 
   listUndoRedo(noteId: NoteId, limit: number): Promise<UndoRedoList>;
+  /** Undo and redo steps with their forward operations, ready to hand back to an editor. */
+  listHistory(noteId: NoteId, limit: number): Promise<NoteHistory>;
+
+  /**
+   * The most recent transactions this store has committed for a note. An editor journal can
+   * hold a committed row it never marked applied; replaying it again would duplicate the edit.
+   */
+  listAppliedTransactionIds(noteId: NoteId, limit: number): Promise<readonly TransactionId[]>;
+
+  reorderNote(noteId: NoteId, manualPosition: string): Promise<void>;
+  /** Removes a note and everything that belongs only to it. Trash is the reversible path. */
+  deleteNotePermanently(noteId: NoteId): Promise<void>;
+  /** Deletes notes whose 30-day trash retention has passed. Returns the removed ids. */
+  purgeExpiredTrash(): Promise<readonly NoteId[]>;
 
   saveVersion(
     noteId: NoteId,

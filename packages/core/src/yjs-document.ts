@@ -218,6 +218,17 @@ export class YjsCrdtDocument implements CrdtDocument {
       }
       return;
     }
+    const fromBlock = asXmlElement(start.text.parent);
+    const toBlock = asXmlElement(end.text.parent);
+    if (fromBlock !== null && toBlock !== null && fromBlock !== toBlock) {
+      // Across text blocks the schema defines one edit, joining adjacent list items, and
+      // apply-operations rejects anything else. Matching it keeps the CRDT and the store equal.
+      if (offsetWithin(fromBlock, start) !== blockLength(fromBlock) || offsetWithin(toBlock, end) !== 0) {
+        throw new CrdtApplyError('deleteRange across unrelated blocks is not supported');
+      }
+      this.joinListItems(fromBlock, toBlock);
+      return;
+    }
     const texts = xmlTextsInOrder(this.body);
     const startPos = texts.indexOf(start.text);
     const endPos = texts.indexOf(end.text);
@@ -245,6 +256,40 @@ export class YjsCrdtDocument implements CrdtDocument {
     if (loText.length - loIndex > 0) {
       loText.delete(loIndex, loText.length - loIndex);
     }
+  }
+
+  /** Moves the second item's paragraph text and remaining children into the first item, then removes it. */
+  private joinListItems(fromBlock: Y.XmlElement, toBlock: Y.XmlElement): void {
+    const fromItem = asXmlElement(fromBlock.parent);
+    const toItem = asXmlElement(toBlock.parent);
+    if (fromItem === null || toItem === null || !isListItem(fromItem) || !isListItem(toItem)) {
+      throw new CrdtApplyError('list join requires two list items');
+    }
+    const list = asXmlElement(fromItem.parent);
+    const items = list === null ? [] : list.toArray();
+    const fromIndex = items.indexOf(fromItem);
+    if (list === null || toItem.parent !== list || items.indexOf(toItem) !== fromIndex + 1) {
+      throw new CrdtApplyError('list join requires adjacent items');
+    }
+    for (const child of xmlChildren(toBlock)) {
+      const last = fromBlock.length > 0 ? fromBlock.get(fromBlock.length - 1) : null;
+      if (child instanceof Y.XmlText && last instanceof Y.XmlText) {
+        // One text node, as apply-operations merges it. Every mark is spelled out so the
+        // appended text does not inherit formatting from the text before it.
+        for (const run of xmlTextToRuns(child)) {
+          last.insert(last.length, run.insert, formatFromMarks(marksFromFormat(run.attributes)));
+        }
+        continue;
+      }
+      fromBlock.insert(fromBlock.length, [child.clone()]);
+    }
+    const rest = xmlChildren(toItem)
+      .filter((child) => child !== toBlock)
+      .map((child) => child.clone());
+    if (rest.length > 0) {
+      fromItem.insert(fromItem.length, rest);
+    }
+    list.delete(fromIndex + 1, 1);
   }
 
   private insertSlice(position: SchemaSelection, nodes: readonly SchemaNode[]): void {
@@ -318,28 +363,38 @@ export class YjsCrdtDocument implements CrdtDocument {
     }
   }
 
+  /**
+   * A caret on a list or task item means its first paragraph, the same rule
+   * `apply-operations` uses. Writing into the item element itself would add a second paragraph.
+   */
+  private textContainer(element: Y.XmlElement): Y.XmlElement {
+    if (element.nodeName !== 'listItem' && element.nodeName !== 'taskItem') {
+      return element;
+    }
+    const paragraph = xmlChildren(element).find(
+      (child): child is Y.XmlElement => child instanceof Y.XmlElement && child.nodeName === 'paragraph',
+    );
+    if (paragraph !== undefined) {
+      return paragraph;
+    }
+    const created = new Y.XmlElement('paragraph');
+    created.setAttribute('id', deriveId(String(element.getAttribute('id')), 'paragraph', 0));
+    element.insert(0, [created]);
+    return created;
+  }
+
   private locateInsert(position: SchemaSelection): { text: Y.XmlText; index: number } {
     const element = this.findElement(position.nodeId);
     if (element !== null) {
-      return this.ensureTextAt(element, position.offsetUtf16);
+      return this.ensureTextAt(this.textContainer(element), position.offsetUtf16);
     }
     const existing = this.locateTextRun(position.nodeId, position.offsetUtf16);
     if (existing !== null) {
       return existing;
     }
-    if (position.nodeId === this.readDocId()) {
-      if (this.body.length === 0) {
-        const paragraph = new Y.XmlElement('paragraph');
-        paragraph.setAttribute('id', deriveId(this.readDocId(), 'paragraph', 0));
-        const text = new Y.XmlText();
-        paragraph.insert(0, [text]);
-        this.body.insert(0, [paragraph]);
-        return { text, index: 0 };
-      }
-      const first = this.body.get(0);
-      if (first instanceof Y.XmlElement) {
-        return this.ensureTextAt(first, position.offsetUtf16);
-      }
+    const created = this.materializeMissingParagraph(position.nodeId);
+    if (created !== null) {
+      return this.ensureTextAt(created, position.offsetUtf16);
     }
     throw new CrdtApplyError(`insertText: missing node ${position.nodeId}`);
   }
@@ -347,13 +402,41 @@ export class YjsCrdtDocument implements CrdtDocument {
   private locate(position: SchemaSelection): { text: Y.XmlText; index: number } {
     const element = this.findElement(position.nodeId);
     if (element !== null) {
-      return this.offsetInElement(element, position.offsetUtf16);
+      return this.offsetInElement(this.textContainer(element), position.offsetUtf16);
     }
     const run = this.locateTextRun(position.nodeId, position.offsetUtf16);
     if (run !== null) {
       return run;
     }
+    const created = this.materializeMissingParagraph(position.nodeId);
+    if (created !== null) {
+      return this.offsetInElement(created, position.offsetUtf16);
+    }
     throw new CrdtApplyError(`position not found: ${position.nodeId}`);
+  }
+
+  private materializeMissingParagraph(nodeId: NodeId): Y.XmlElement | null {
+    const docId = this.readDocId();
+    if (nodeId === docId) {
+      const first = this.body.get(0);
+      if (first instanceof Y.XmlElement) {
+        return first;
+      }
+    }
+    const paragraphId = nodeId === docId ? deriveId(docId, 'paragraph', 0) : nodeId;
+    const existing = this.findElement(paragraphId);
+    if (existing !== null) {
+      return existing;
+    }
+    if (this.body.length > 0) {
+      return null;
+    }
+    const paragraph = new Y.XmlElement('paragraph');
+    paragraph.setAttribute('id', paragraphId);
+    const text = new Y.XmlText();
+    paragraph.insert(0, [text]);
+    this.body.insert(0, [paragraph]);
+    return paragraph;
   }
 
   private ensureTextAt(element: Y.XmlElement, offset: number): { text: Y.XmlText; index: number } {
@@ -533,6 +616,34 @@ function xmlTextsInOrder(root: XmlParent): Y.XmlText[] {
   };
   walk(root);
   return out;
+}
+
+function asXmlElement(value: unknown): Y.XmlElement | null {
+  return value instanceof Y.XmlElement ? (value as Y.XmlElement) : null;
+}
+
+function isListItem(element: Y.XmlElement): boolean {
+  return element.nodeName === 'listItem' || element.nodeName === 'taskItem';
+}
+
+/** Text length of a block in schema offsets: text plus one for each hard break. */
+function blockLength(block: Y.XmlElement): number {
+  let length = 0;
+  for (const child of xmlChildren(block)) {
+    length += child instanceof Y.XmlText ? child.length : child.nodeName === 'hardBreak' ? 1 : 0;
+  }
+  return length;
+}
+
+function offsetWithin(block: Y.XmlElement, location: { readonly text: Y.XmlText; readonly index: number }): number {
+  let offset = 0;
+  for (const child of xmlChildren(block)) {
+    if (child === location.text) {
+      return offset + location.index;
+    }
+    offset += child instanceof Y.XmlText ? child.length : child.nodeName === 'hardBreak' ? 1 : 0;
+  }
+  return -1;
 }
 
 function lastXmlText(children: readonly XmlChild[]): Y.XmlText | null {

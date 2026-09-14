@@ -14,6 +14,7 @@ type View = 'notes' | 'trash';
 type IconName = 'menu' | 'new' | 'notes' | 'search' | 'trash';
 
 const STORAGE_KEY = 'jot.desktop.notes.v1';
+const NARROW_QUERY = '(max-width: 720px)';
 
 function isNote(value: unknown): value is Note {
   if (typeof value !== 'object' || value === null) {
@@ -76,6 +77,25 @@ function notePreview(note: Note): string {
   return preview.length > 0 ? preview : 'Empty note';
 }
 
+function useNarrowScreen(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
+  useEffect(() => {
+    const media = window.matchMedia(NARROW_QUERY);
+    const onChange = (): void => {
+      setNarrow(media.matches);
+    };
+    media.addEventListener('change', onChange);
+    return () => {
+      media.removeEventListener('change', onChange);
+    };
+  }, []);
+  return narrow;
+}
+
+function shortcutKey(): string {
+  return /mac|iphone|ipad/i.test(navigator.userAgent) ? '⌘K' : 'Ctrl+K';
+}
+
 function Icon({ name }: { readonly name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
     menu: <path d="M4 7h16M4 12h16M4 17h16" />,
@@ -100,7 +120,8 @@ export default function App() {
   );
   const [view, setView] = useState<View>('notes');
   const [query, setQuery] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const narrow = useNarrowScreen();
+  const [sidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia(NARROW_QUERY).matches);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'error'>('saved');
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -141,13 +162,13 @@ export default function App() {
     setActiveId(note.id);
     setView('notes');
     setQuery('');
-    setSidebarOpen(false);
+    setSidebarOpen(!narrow);
   };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) {
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && window.matchMedia(NARROW_QUERY).matches) {
           setSidebarOpen(false);
         }
         return;
@@ -215,7 +236,7 @@ export default function App() {
     : 0;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <a className="skip-link" href="#editor">
         Skip to editor
       </a>
@@ -278,7 +299,7 @@ export default function App() {
             }}
             placeholder="Search"
           />
-          <kbd>⌘K</kbd>
+          <kbd>{shortcutKey()}</kbd>
         </label>
 
         <div className="note-list-heading">
@@ -295,7 +316,9 @@ export default function App() {
                 aria-current={note.id === activeId ? 'true' : undefined}
                 onClick={() => {
                   setActiveId(note.id);
-                  setSidebarOpen(false);
+                  if (narrow) {
+                    setSidebarOpen(false);
+                  }
                 }}
               >
                 <span className="note-row-topline">
@@ -315,7 +338,7 @@ export default function App() {
 
         <div className="local-status">
           <span className="status-dot" />
-          Stored on this device
+          On this device
         </div>
       </aside>
 
@@ -324,9 +347,10 @@ export default function App() {
           <button
             className="icon-button menu-button"
             type="button"
-            aria-label="Open notes"
+            aria-label={sidebarOpen ? 'Hide notes' : 'Show notes'}
+            aria-pressed={sidebarOpen}
             onClick={() => {
-              setSidebarOpen(true);
+              setSidebarOpen((open) => !open);
             }}
           >
             <Icon name="menu" />
@@ -375,13 +399,11 @@ export default function App() {
             <div className="empty-mark" aria-hidden="true">
               <Icon name={view === 'trash' ? 'trash' : 'notes'} />
             </div>
-            <h1 id="empty-title">
-              {view === 'trash' ? 'Trash is empty' : 'A quiet place for your notes'}
-            </h1>
+            <h1 id="empty-title">{view === 'trash' ? 'Trash is empty' : 'No notes yet'}</h1>
             <p>
               {view === 'trash'
-                ? 'Notes you move here can be restored or deleted for good.'
-                : 'Your notes stay on this device and save as you write.'}
+                ? 'Restore a note or delete it for good.'
+                : 'Notes stay on this device and save as you type.'}
             </p>
             {view === 'notes' ? (
               <button className="primary-button" type="button" onClick={createNote}>

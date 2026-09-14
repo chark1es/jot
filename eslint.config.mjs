@@ -35,6 +35,7 @@ export default tseslint.config(
       "**/metro.config.cjs",
       "**/metro-shims/**",
       "apps/editor-lab/benchmarks/**",
+      "packages/local-store/benchmarks/**",
     ],
   },
   js.configs.recommended,

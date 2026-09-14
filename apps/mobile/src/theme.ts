@@ -23,5 +23,10 @@ export function editorFontFamily(): string | undefined {
   });
 }
 
+export const typeSize = tokens.type.ui.size;
 export const touchMin = tokens.spacing.scale.space48;
 export const editorBodySize = tokens.type.editor.body.size;
+
+export function pressedStyle(pressed: boolean): { opacity: number } {
+  return { opacity: pressed ? 0.58 : 1 };
+}

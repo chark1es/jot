@@ -10,6 +10,16 @@ object Tokens {
                 const val android = "Roboto"
                 const val windows = "Segoe UI"
             }
+            object Size {
+                const val largeTitle = 34
+                const val title = 17
+                const val body = 17
+                const val subhead = 15
+                const val footnote = 13
+                const val caption = 12
+                const val desktop = 13
+                const val desktopSecondary = 11
+            }
         }
         object Editor {
             object FontFamily {
@@ -47,37 +57,37 @@ object Tokens {
     }
     object Color {
         object Light {
-            const val canvas = 0xFFF4F0E7.toInt()
-            const val surface = 0xFFEBE6DB.toInt()
-            const val ink = 0xFF1A1814.toInt()
-            const val inkMuted = 0xFF5E584F.toInt()
-            const val inkFaint = 0xFF8C857A.toInt()
-            const val hairline = 0xFFD6CFC2.toInt()
-            const val accent = 0xFFB4681A.toInt()
-            const val accentMuted = 0xFFE6D3B3.toInt()
+            const val canvas = 0xFFF6F5F1.toInt()
+            const val surface = 0xFFECEAE4.toInt()
+            const val ink = 0xFF1A1916.toInt()
+            const val inkMuted = 0xFF534F48.toInt()
+            const val inkFaint = 0xFF68635B.toInt()
+            const val hairline = 0xFFD5D1C8.toInt()
+            const val accent = 0xFF2E4A63.toInt()
+            const val accentMuted = 0xFFD7DEE6.toInt()
             const val error = 0xFF9C2F2A.toInt()
-            const val warning = 0xFF9A5A10.toInt()
+            const val warning = 0xFF8A5510.toInt()
             const val success = 0xFF2C6844.toInt()
-            const val selection = 0xFFE6D3B3.toInt()
-            const val focus = 0xFFB4681A.toInt()
-            const val link = 0xFF8A4C12.toInt()
+            const val selection = 0xFFD7DEE6.toInt()
+            const val focus = 0xFF2E4A63.toInt()
+            const val link = 0xFF2E4A63.toInt()
             const val sync = 0xFF3C6758.toInt()
         }
         object Dark {
-            const val canvas = 0xFF12110F.toInt()
-            const val surface = 0xFF1B1A17.toInt()
-            const val ink = 0xFFECE8E0.toInt()
-            const val inkMuted = 0xFFA49C92.toInt()
-            const val inkFaint = 0xFF706960.toInt()
-            const val hairline = 0xFF2E2C28.toInt()
-            const val accent = 0xFFD0913A.toInt()
-            const val accentMuted = 0xFF3A2C18.toInt()
+            const val canvas = 0xFF1C1B19.toInt()
+            const val surface = 0xFF121211.toInt()
+            const val ink = 0xFFECEAE4.toInt()
+            const val inkMuted = 0xFFA8A39A.toInt()
+            const val inkFaint = 0xFF908B82.toInt()
+            const val hairline = 0xFF2F2E2A.toInt()
+            const val accent = 0xFF9EB6C9.toInt()
+            const val accentMuted = 0xFF243444.toInt()
             const val error = 0xFFE27470.toInt()
             const val warning = 0xFFD4A054.toInt()
             const val success = 0xFF73B88C.toInt()
-            const val selection = 0xFF3A2C18.toInt()
-            const val focus = 0xFFD0913A.toInt()
-            const val link = 0xFFE0B16C.toInt()
+            const val selection = 0xFF243444.toInt()
+            const val focus = 0xFF9EB6C9.toInt()
+            const val link = 0xFFB7C9D8.toInt()
             const val sync = 0xFF7A9E8E.toInt()
         }
     }

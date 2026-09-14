@@ -1,0 +1,1422 @@
+{
+  "description": "Editor scenarios every platform runs through its native planner. scripts/native-editor-check.ts compares Swift, Kotlin, TypeScript applyOperations, and Yjs. Steps address editor characters: markers and newlines count.",
+  "scenarios": [
+    {
+      "name": "typing in an empty note",
+      "doc": {
+        "type": "doc",
+        "id": "aabaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "Hello"
+        }
+      ],
+      "expect": [
+        "paragraph: Hello"
+      ]
+    },
+    {
+      "name": "enter splits a paragraph",
+      "doc": {
+        "type": "doc",
+        "id": "aaeaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "aacaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aadaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "hello world",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 6
+        },
+        {
+          "key": "enter"
+        }
+      ],
+      "expect": [
+        "paragraph: hello ",
+        "paragraph: world"
+      ]
+    },
+    {
+      "name": "backspace joins paragraphs",
+      "doc": {
+        "type": "doc",
+        "id": "aajaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "aafaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aagaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "ab",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "id": "aahaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aaiaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "cd",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 3
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "paragraph: abcd"
+      ]
+    },
+    {
+      "name": "heading shortcut",
+      "doc": {
+        "type": "doc",
+        "id": "aakaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "## Title"
+        }
+      ],
+      "expect": [
+        "heading(level=2): Title"
+      ]
+    },
+    {
+      "name": "bullet shortcut, new item, and lift out of the list",
+      "doc": {
+        "type": "doc",
+        "id": "aalaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "- one"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "two"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "after"
+        }
+      ],
+      "expect": [
+        "bulletList>listItem>paragraph: one",
+        "bulletList>listItem>paragraph: two",
+        "paragraph: after"
+      ]
+    },
+    {
+      "name": "star and plus bullet shortcuts",
+      "doc": {
+        "type": "doc",
+        "id": "aamaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "* x"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "+ y"
+        }
+      ],
+      "expect": [
+        "bulletList>listItem>paragraph: x",
+        "bulletList>listItem>paragraph: y"
+      ]
+    },
+    {
+      "name": "ordered list shortcut",
+      "doc": {
+        "type": "doc",
+        "id": "aanaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "1. first"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "second"
+        }
+      ],
+      "expect": [
+        "orderedList(start=1)>listItem>paragraph: first",
+        "orderedList(start=1)>listItem>paragraph: second"
+      ]
+    },
+    {
+      "name": "unchecked task shortcut",
+      "doc": {
+        "type": "doc",
+        "id": "aaoaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "[ ] todo"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "next"
+        }
+      ],
+      "expect": [
+        "taskList>taskItem(checked=0)>paragraph: todo",
+        "taskList>taskItem(checked=0)>paragraph: next"
+      ]
+    },
+    {
+      "name": "checked task shortcut",
+      "doc": {
+        "type": "doc",
+        "id": "aapaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "[x] done"
+        }
+      ],
+      "expect": [
+        "taskList>taskItem(checked=1)>paragraph: done"
+      ]
+    },
+    {
+      "name": "code block shortcut keeps newlines inside the block",
+      "doc": {
+        "type": "doc",
+        "id": "aaqaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "```"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "let x"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "y"
+        }
+      ],
+      "expect": [
+        "codeBlock: let x\ny"
+      ]
+    },
+    {
+      "name": "quote shortcut, split inside, and exit on an empty line",
+      "doc": {
+        "type": "doc",
+        "id": "aaraaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "> quoted"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "out"
+        }
+      ],
+      "expect": [
+        "blockquote>paragraph: quoted",
+        "paragraph: out"
+      ]
+    },
+    {
+      "name": "divider shortcut",
+      "doc": {
+        "type": "doc",
+        "id": "aasaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "---"
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "below"
+        }
+      ],
+      "expect": [
+        "horizontalRule",
+        "paragraph: below"
+      ]
+    },
+    {
+      "name": "inline Markdown marks and links",
+      "doc": {
+        "type": "doc",
+        "id": "aataaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "a **b** _c_ `d` ~~e~~ [f](https://x.y) g"
+        }
+      ],
+      "expect": [
+        "paragraph: a {b|bold} {c|italic} {d|inlineCode} {e|strikethrough} {f|link} g"
+      ]
+    },
+    {
+      "name": "snake_case stays plain",
+      "doc": {
+        "type": "doc",
+        "id": "aauaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "snake_case_ ok"
+        }
+      ],
+      "expect": [
+        "paragraph: snake_case_ ok"
+      ]
+    },
+    {
+      "name": "typing with stored marks",
+      "doc": {
+        "type": "doc",
+        "id": "aavaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "marks": [
+            "bold"
+          ]
+        },
+        {
+          "type": "bold"
+        },
+        {
+          "marks": []
+        },
+        {
+          "type": " plain"
+        }
+      ],
+      "expect": [
+        "paragraph: {bold|bold} plain"
+      ]
+    },
+    {
+      "name": "toggle marks on a selection",
+      "doc": {
+        "type": "doc",
+        "id": "aayaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "aawaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aaxaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "hello world",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "select": [
+            0,
+            5
+          ]
+        },
+        {
+          "command": "toggleBold"
+        },
+        {
+          "command": "toggleBold"
+        },
+        {
+          "select": [
+            6,
+            11
+          ]
+        },
+        {
+          "command": "toggleItalic"
+        }
+      ],
+      "expect": [
+        "paragraph: hello {world|italic}"
+      ]
+    },
+    {
+      "name": "list commands",
+      "doc": {
+        "type": "doc",
+        "id": "aa5aaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "aazaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aa2aaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "one",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "id": "aa3aaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aa4aaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "two",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "command": "toggleBulletList"
+        },
+        {
+          "caret": 5
+        },
+        {
+          "command": "toggleOrderedList"
+        },
+        {
+          "caret": 6
+        },
+        {
+          "command": "toggleTaskList"
+        }
+      ],
+      "expect": [
+        "bulletList>listItem>paragraph: one",
+        "taskList>taskItem(checked=0)>paragraph: two"
+      ]
+    },
+    {
+      "name": "heading and code block commands",
+      "doc": {
+        "type": "doc",
+        "id": "abaaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "aa6aaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aa7aaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "Title",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "command": "setHeading",
+          "value": {
+            "level": 1
+          }
+        },
+        {
+          "command": "setHeading",
+          "value": {
+            "level": 3
+          }
+        },
+        {
+          "command": "toggleCodeBlock"
+        },
+        {
+          "command": "toggleCodeBlock"
+        },
+        {
+          "command": "setHeading",
+          "value": {
+            "level": 2
+          }
+        }
+      ],
+      "expect": [
+        "heading(level=2): Title"
+      ]
+    },
+    {
+      "name": "blockquote command, then backspace at its start",
+      "doc": {
+        "type": "doc",
+        "id": "abdaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "abbaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "abcaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "quote me",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "command": "toggleBlockquote"
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "paragraph: quote me"
+      ]
+    },
+    {
+      "name": "backspace right after a shortcut restores the characters",
+      "doc": {
+        "type": "doc",
+        "id": "abeaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "- "
+        },
+        {
+          "key": "backspace"
+        },
+        {
+          "type": "x"
+        }
+      ],
+      "expect": [
+        "paragraph: -x"
+      ]
+    },
+    {
+      "name": "undo and redo typing",
+      "doc": {
+        "type": "doc",
+        "id": "abfaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "abc"
+        },
+        {
+          "key": "undo"
+        },
+        {
+          "key": "undo"
+        },
+        {
+          "key": "redo"
+        }
+      ],
+      "expect": [
+        "paragraph: ab"
+      ]
+    },
+    {
+      "name": "undo and redo a join",
+      "doc": {
+        "type": "doc",
+        "id": "abkaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "abgaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "abhaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "ab",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "id": "abiaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "abjaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "cd",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 3
+        },
+        {
+          "key": "backspace"
+        },
+        {
+          "key": "undo"
+        },
+        {
+          "key": "redo"
+        }
+      ],
+      "expect": [
+        "paragraph: abcd"
+      ]
+    },
+    {
+      "name": "insert an image and resize it",
+      "doc": {
+        "type": "doc",
+        "id": "abnaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "ablaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "abmaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "text",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 4
+        },
+        {
+          "command": "insertImage",
+          "value": {
+            "attachmentId": "aboaaaaaaaaaaaaaaaaaaaaaaa",
+            "alt": "cat"
+          }
+        },
+        {
+          "command": "setImageWidth",
+          "value": {
+            "widthBasisPoints": 5000
+          },
+          "targetBlock": 1
+        },
+        {
+          "command": "setImageWidth",
+          "value": {
+            "widthBasisPoints": 10
+          },
+          "targetBlock": 1
+        }
+      ],
+      "expect": [
+        "paragraph: text",
+        "image(alt=cat,widthBasisPoints=2000)",
+        "paragraph:"
+      ]
+    },
+    {
+      "name": "typing beside an image starts a paragraph",
+      "doc": {
+        "type": "doc",
+        "id": "absaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "image",
+            "id": "abpaaaaaaaaaaaaaaaaaaaaaaa",
+            "attrs": {
+              "attachmentId": "abqaaaaaaaaaaaaaaaaaaaaaaa",
+              "widthBasisPoints": 10000,
+              "alt": ""
+            },
+            "content": []
+          },
+          {
+            "type": "paragraph",
+            "id": "abraaaaaaaaaaaaaaaaaaaaaaa",
+            "content": []
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 1
+        },
+        {
+          "type": "x"
+        }
+      ],
+      "expect": [
+        "image(widthBasisPoints=10000)",
+        "paragraph: x",
+        "paragraph:"
+      ]
+    },
+    {
+      "name": "backspace after a divider removes it",
+      "doc": {
+        "type": "doc",
+        "id": "abyaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "abtaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "abuaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "a",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "horizontalRule",
+            "id": "abvaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "type": "paragraph",
+            "id": "abwaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "abxaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "b",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 4
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "paragraph: a",
+        "paragraph: b"
+      ]
+    },
+    {
+      "name": "deleting a selected image",
+      "doc": {
+        "type": "doc",
+        "id": "ab7aaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "abzaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "ab2aaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "a",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "image",
+            "id": "ab3aaaaaaaaaaaaaaaaaaaaaaa",
+            "attrs": {
+              "attachmentId": "ab4aaaaaaaaaaaaaaaaaaaaaaa",
+              "widthBasisPoints": 10000,
+              "alt": ""
+            },
+            "content": []
+          },
+          {
+            "type": "paragraph",
+            "id": "ab5aaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "ab6aaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "b",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "select": [
+            2,
+            3
+          ]
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "paragraph: a",
+        "paragraph: b"
+      ]
+    },
+    {
+      "name": "remove block command",
+      "doc": {
+        "type": "doc",
+        "id": "acfaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "acaaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "acbaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "a",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "horizontalRule",
+            "id": "accaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "type": "paragraph",
+            "id": "acdaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "aceaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "b",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "command": "removeBlock",
+          "targetBlock": 1
+        }
+      ],
+      "expect": [
+        "paragraph: a",
+        "paragraph: b"
+      ]
+    },
+    {
+      "name": "typing over a selection across paragraphs",
+      "doc": {
+        "type": "doc",
+        "id": "ackaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "acgaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "achaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "hello",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "id": "aciaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "acjaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "world",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "select": [
+            3,
+            9
+          ]
+        },
+        {
+          "type": "X"
+        }
+      ],
+      "expect": [
+        "paragraph: helXld"
+      ]
+    },
+    {
+      "name": "enter replaces a selection",
+      "doc": {
+        "type": "doc",
+        "id": "acnaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "aclaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "acmaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "abcdef",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "select": [
+            2,
+            4
+          ]
+        },
+        {
+          "key": "enter"
+        }
+      ],
+      "expect": [
+        "paragraph: ab",
+        "paragraph: ef"
+      ]
+    },
+    {
+      "name": "pasted Markdown blocks split a paragraph",
+      "doc": {
+        "type": "doc",
+        "id": "acqaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "acoaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "acpaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "hello world",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 6
+        },
+        {
+          "command": "insertBlocks",
+          "value": {
+            "nodes": [
+              {
+                "type": "heading",
+                "id": "acraaaaaaaaaaaaaaaaaaaaaaa",
+                "content": [
+                  {
+                    "type": "text",
+                    "id": "acsaaaaaaaaaaaaaaaaaaaaaaa",
+                    "text": "Title",
+                    "marks": []
+                  }
+                ],
+                "attrs": {
+                  "level": 2
+                }
+              },
+              {
+                "type": "paragraph",
+                "id": "acuaaaaaaaaaaaaaaaaaaaaaaa",
+                "content": [
+                  {
+                    "type": "text",
+                    "id": "actaaaaaaaaaaaaaaaaaaaaaaa",
+                    "text": "body",
+                    "marks": [
+                      {
+                        "type": "bold"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "expect": [
+        "paragraph: hello ",
+        "heading(level=2): Title",
+        "paragraph: {body|bold}",
+        "paragraph: world"
+      ]
+    },
+    {
+      "name": "links from the toolbar",
+      "doc": {
+        "type": "doc",
+        "id": "acxaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "acvaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "acwaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "see docs",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "select": [
+            4,
+            8
+          ]
+        },
+        {
+          "command": "setLink",
+          "value": {
+            "href": "https://jot.app",
+            "title": ""
+          }
+        },
+        {
+          "command": "setLink",
+          "value": {
+            "href": "javascript:alert(1)",
+            "title": ""
+          }
+        },
+        {
+          "caret": 6
+        },
+        {
+          "command": "unsetLink"
+        },
+        {
+          "caret": 8
+        },
+        {
+          "command": "setLink",
+          "value": {
+            "href": "mailto:a@b.co",
+            "title": ""
+          }
+        }
+      ],
+      "expect": [
+        "paragraph: see docs{mailto:a@b.co|link}"
+      ]
+    },
+    {
+      "name": "task check, then backspace joins items",
+      "doc": {
+        "type": "doc",
+        "id": "ac7aaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "taskList",
+            "id": "ac6aaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "taskItem",
+                "id": "acyaaaaaaaaaaaaaaaaaaaaaaa",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "id": "aczaaaaaaaaaaaaaaaaaaaaaaa",
+                    "content": [
+                      {
+                        "type": "text",
+                        "id": "ac2aaaaaaaaaaaaaaaaaaaaaaa",
+                        "text": "a",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ],
+                "attrs": {
+                  "checked": 0
+                }
+              },
+              {
+                "type": "taskItem",
+                "id": "ac3aaaaaaaaaaaaaaaaaaaaaaa",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "id": "ac4aaaaaaaaaaaaaaaaaaaaaaa",
+                    "content": [
+                      {
+                        "type": "text",
+                        "id": "ac5aaaaaaaaaaaaaaaaaaaaaaa",
+                        "text": "b",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ],
+                "attrs": {
+                  "checked": 1
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 4
+        },
+        {
+          "command": "toggleTaskItemChecked"
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "taskList>taskItem(checked=0)>paragraph: ab"
+      ]
+    },
+    {
+      "name": "enter in a nested list item",
+      "doc": {
+        "type": "doc",
+        "id": "adiaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "bulletList",
+            "id": "adhaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "listItem",
+                "id": "adeaaaaaaaaaaaaaaaaaaaaaaa",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "id": "adfaaaaaaaaaaaaaaaaaaaaaaa",
+                    "content": [
+                      {
+                        "type": "text",
+                        "id": "adgaaaaaaaaaaaaaaaaaaaaaaa",
+                        "text": "parent",
+                        "marks": []
+                      }
+                    ]
+                  },
+                  {
+                    "type": "bulletList",
+                    "id": "addaaaaaaaaaaaaaaaaaaaaaaa",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "id": "adaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "id": "adbaaaaaaaaaaaaaaaaaaaaaaa",
+                            "content": [
+                              {
+                                "type": "text",
+                                "id": "adcaaaaaaaaaaaaaaaaaaaaaaa",
+                                "text": "child",
+                                "marks": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 14
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "sibling"
+        }
+      ],
+      "expect": [
+        "bulletList>listItem>paragraph: parent",
+        "bulletList>listItem>bulletList>listItem>paragraph: child",
+        "bulletList>listItem>bulletList>listItem>paragraph: sibling"
+      ]
+    },
+    {
+      "name": "emoji and backspace over a surrogate pair",
+      "doc": {
+        "type": "doc",
+        "id": "adjaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": []
+      },
+      "steps": [
+        {
+          "caret": 0
+        },
+        {
+          "type": "a\ud83d\ude00b"
+        },
+        {
+          "key": "backspace"
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "paragraph: a"
+      ]
+    },
+    {
+      "name": "backspace at a heading start makes body text",
+      "doc": {
+        "type": "doc",
+        "id": "adoaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "paragraph",
+            "id": "adkaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "adlaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "x",
+                "marks": []
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "id": "admaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "adnaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "Head",
+                "marks": []
+              }
+            ],
+            "attrs": {
+              "level": 2
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 2
+        },
+        {
+          "key": "backspace"
+        }
+      ],
+      "expect": [
+        "paragraph: x",
+        "paragraph: Head"
+      ]
+    },
+    {
+      "name": "enter at the end of a heading",
+      "doc": {
+        "type": "doc",
+        "id": "adraaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [
+          {
+            "type": "heading",
+            "id": "adpaaaaaaaaaaaaaaaaaaaaaaa",
+            "content": [
+              {
+                "type": "text",
+                "id": "adqaaaaaaaaaaaaaaaaaaaaaaa",
+                "text": "Title",
+                "marks": []
+              }
+            ],
+            "attrs": {
+              "level": 1
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caret": 5
+        },
+        {
+          "key": "enter"
+        },
+        {
+          "type": "body"
+        }
+      ],
+      "expect": [
+        "heading(level=1): Title",
+        "paragraph: body"
+      ]
+    }
+  ]
+}

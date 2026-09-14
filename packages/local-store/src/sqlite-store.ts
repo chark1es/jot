@@ -19,6 +19,7 @@ import {
   parseDocument,
   parseId,
   SCHEMA_VERSION,
+  utf8Decode,
   validateFolder,
   validateTag,
 } from '@jot/schema';
@@ -49,12 +50,14 @@ import type {
   CreateTagInput,
   DiagnosticEntry,
   FolderCycleRepairEvent,
+  HistoryEntry,
   ImportAttachmentInput,
   IntakeRecord,
   ListNotesQuery,
   LocalStoreOptions,
   NoteCommand,
   NoteDocument,
+  NoteHistory,
   NoteListItem,
   NoteProjection,
   RestoreVersionResult,
@@ -67,7 +70,7 @@ import type {
   VersionSnapshot,
   VersionTier,
 } from './types.js';
-import { systemClock, TRASH_RETENTION_MS } from './types.js';
+import { systemClock, TRASH_RETENTION_MS, UNDO_HISTORY_LIMIT } from './types.js';
 import { selectAutomaticVersionTier } from './versions.js';
 
 /* SQLite drivers used here are synchronous. LocalStore is async for expo-sqlite. */
@@ -158,21 +161,36 @@ class SqliteLocalStore implements LocalStore {
       );
       this.applyProjection(input.projection, wallMs);
       this.writeDocument(input.noteId, input.document);
-      if (input.restoredFrom !== undefined) {
+      if (input.history !== undefined) {
+        // Replaying a step moves the original entry to the other stack. Recording the replay
+        // as a new step would make a second undo redo the first.
         this.driver.run(
-          `UPDATE undo_entries SET stack = 'redo' WHERE transaction_id = ? AND note_id = ?`,
-          [input.restoredFrom, input.noteId],
+          `UPDATE undo_entries SET stack = ? WHERE transaction_id = ? AND note_id = ?`,
+          [input.history.kind === 'undo' ? 'redo' : 'undo', input.history.transactionId, input.noteId],
         );
       } else {
-        this.driver.run(`DELETE FROM undo_entries WHERE note_id = ? AND stack = 'redo'`, [
-          input.noteId,
-        ]);
+        if (input.restoredFrom !== undefined) {
+          this.driver.run(
+            `UPDATE undo_entries SET stack = 'redo' WHERE transaction_id = ? AND note_id = ?`,
+            [input.restoredFrom, input.noteId],
+          );
+        } else {
+          this.driver.run(`DELETE FROM undo_entries WHERE note_id = ? AND stack = 'redo'`, [
+            input.noteId,
+          ]);
+        }
+        this.driver.run(
+          `INSERT INTO undo_entries(transaction_id, note_id, inverse, created_wall_ms, stack)
+           VALUES (?, ?, ?, ?, 'undo')`,
+          [input.undo.transactionId, input.noteId, input.undo.inverse, wallMs],
+        );
+        this.driver.run(
+          `DELETE FROM undo_entries WHERE note_id = ? AND stack = 'undo' AND id NOT IN (
+             SELECT id FROM undo_entries WHERE note_id = ? AND stack = 'undo' ORDER BY id DESC LIMIT ?
+           )`,
+          [input.noteId, input.noteId, UNDO_HISTORY_LIMIT],
+        );
       }
-      this.driver.run(
-        `INSERT INTO undo_entries(transaction_id, note_id, inverse, created_wall_ms, stack)
-         VALUES (?, ?, ?, ?, 'undo')`,
-        [input.undo.transactionId, input.noteId, input.undo.inverse, wallMs],
-      );
       this.driver.run(
         `INSERT INTO outbox(transaction_id, note_id, payload, created_wall_ms)
          VALUES (?, ?, ?, ?)`,
@@ -328,35 +346,158 @@ class SqliteLocalStore implements LocalStore {
     const sort = query.sort ?? 'modified';
     const archived = query.archived ?? false;
     const trash = query.trash ?? 'active';
-    const clauses: string[] = ['archived = ?'];
-    const params: SqlValue[] = [archived ? 1 : 0];
+    const clauses: string[] = [];
+    const params: SqlValue[] = [];
+    if (archived !== 'any') {
+      clauses.push('n.archived = ?');
+      params.push(archived ? 1 : 0);
+    }
     if (trash === 'active') {
-      clauses.push('trashed = 0');
+      clauses.push('n.trashed = 0');
     } else if (trash === 'trashed') {
-      clauses.push('trashed = 1');
+      clauses.push('n.trashed = 1');
     }
     if (Object.hasOwn(query, 'folderId')) {
       if (query.folderId === null || query.folderId === undefined) {
-        clauses.push('folder_id IS NULL');
+        clauses.push('n.folder_id IS NULL');
       } else {
-        clauses.push('folder_id = ?');
+        clauses.push('n.folder_id = ?');
         params.push(query.folderId);
       }
     }
     const orderBy =
       sort === 'created'
-        ? 'pinned DESC, created_wall_ms DESC, id ASC'
+        ? 'n.pinned DESC, n.created_wall_ms DESC, n.id ASC'
         : sort === 'title'
-          ? 'pinned DESC, title COLLATE NOCASE ASC, id ASC'
+          ? 'n.pinned DESC, n.title COLLATE NOCASE ASC, n.id ASC'
           : sort === 'manual'
-            ? 'pinned DESC, manual_position ASC, id ASC'
-            : 'pinned DESC, modified_wall_ms DESC, id ASC';
-    const sql = `SELECT id, title, folder_id, pinned, archived, trashed, trashed_at_wall_ms,
-                        purge_after_wall_ms, created_wall_ms, modified_wall_ms, manual_position
-                 FROM notes
-                 WHERE ${clauses.join(' AND ')}
+            ? 'n.pinned DESC, n.manual_position ASC, n.id ASC'
+            : 'n.pinned DESC, n.modified_wall_ms DESC, n.id ASC';
+    const where = clauses.length === 0 ? '' : `WHERE ${clauses.join(' AND ')}`;
+    const sql = `SELECT n.id, n.title, n.folder_id, n.pinned, n.archived, n.trashed, n.trashed_at_wall_ms,
+                        n.purge_after_wall_ms, n.created_wall_ms, n.modified_wall_ms, n.manual_position,
+                        substr(COALESCE(s.body, ''), 1, 240) AS snippet,
+                        (SELECT group_concat(nt.tag_id, ',') FROM note_tags nt WHERE nt.note_id = n.id) AS tag_ids
+                 FROM notes n
+                 LEFT JOIN notes_search_src s ON s.note_id = n.id
+                 ${where}
                  ORDER BY ${orderBy}`;
     return this.driver.all(sql, params).map((row) => this.noteListItem(row));
+  }
+
+  async listHistory(noteId: NoteId, limit: number): Promise<NoteHistory> {
+    this.requireOpen();
+    const take = limit > 0 ? limit : UNDO_HISTORY_LIMIT;
+    const load = (stack: 'undo' | 'redo'): HistoryEntry[] => {
+      const rows = this.driver.all(
+        `SELECT u.transaction_id, u.inverse, i.operations_json
+         FROM undo_entries u
+         JOIN editor_intake i ON i.transaction_id = u.transaction_id
+         WHERE u.note_id = ? AND u.stack = ?
+         ORDER BY u.id DESC
+         LIMIT ?`,
+        [noteId, stack, take],
+      );
+      return rows.flatMap((row) => {
+        try {
+          const inverse = parseOperations(utf8Decode(asBytes(row.inverse, 'inverse')));
+          const forward = parseOperations(asString(row.operations_json, 'operations_json'));
+          if (inverse.length === 0 || forward.length === 0) {
+            return [];
+          }
+          return [
+            {
+              transactionId: parseId<TransactionId>(asString(row.transaction_id, 'transaction_id')),
+              forward,
+              inverse,
+            },
+          ];
+        } catch {
+          return [];
+        }
+      });
+    };
+    // Undo pops the newest step, so it goes last. The newest redo step is the one undone
+    // longest ago and belongs at the bottom of the redo stack.
+    return { undo: load('undo').reverse(), redo: load('redo') };
+  }
+
+  async listAppliedTransactionIds(noteId: NoteId, limit: number): Promise<readonly TransactionId[]> {
+    this.requireOpen();
+    return this.driver
+      .all(
+        `SELECT transaction_id FROM applied_transactions
+         WHERE note_id = ?
+         ORDER BY applied_wall_ms DESC, rowid DESC
+         LIMIT ?`,
+        [noteId, limit > 0 ? limit : 500],
+      )
+      .map((row) => parseId<TransactionId>(asString(row.transaction_id, 'transaction_id')));
+  }
+
+  async reorderNote(noteId: NoteId, manualPosition: string): Promise<void> {
+    this.requireOpen();
+    // Reordering is not an edit, so the modified time stays put.
+    this.driver.run(`UPDATE notes SET manual_position = ? WHERE id = ?`, [manualPosition, noteId]);
+  }
+
+  async deleteNotePermanently(noteId: NoteId): Promise<void> {
+    this.requireOpen();
+    const wallMs = this.clock.wallNow().unixMs;
+    this.driver.transaction(() => {
+      this.deleteNoteRows(noteId);
+      this.diagnose({ eventType: 'note_deleted', entityKind: 'note', entityId: noteId, wallMs });
+    });
+  }
+
+  async purgeExpiredTrash(): Promise<readonly NoteId[]> {
+    this.requireOpen();
+    const wallMs = this.clock.wallNow().unixMs;
+    const ids = this.driver
+      .all(
+        `SELECT id FROM notes
+         WHERE trashed = 1 AND purge_after_wall_ms IS NOT NULL AND purge_after_wall_ms <= ?`,
+        [wallMs],
+      )
+      .map((row) => parseId<NoteId>(asString(row.id, 'id')));
+    if (ids.length === 0) {
+      return [];
+    }
+    this.driver.transaction(() => {
+      for (const id of ids) {
+        this.deleteNoteRows(id);
+      }
+      this.diagnose({ eventType: 'trash_purged', detailCode: String(ids.length), wallMs });
+    });
+    return ids;
+  }
+
+  private deleteNoteRows(noteId: NoteId): void {
+    for (const table of [
+      'documents',
+      'crdt_checkpoints',
+      'crdt_updates',
+      'note_tags',
+      'attachment_refs',
+      'editor_intake',
+      'applied_transactions',
+      'undo_entries',
+      'version_snapshots',
+      'outbox',
+      'notes_search_src',
+    ]) {
+      this.driver.run(`DELETE FROM ${table} WHERE note_id = ?`, [noteId]);
+    }
+    this.driver.run(`DELETE FROM notes WHERE id = ?`, [noteId]);
+    const orphans = this.driver.all(
+      `SELECT a.id FROM attachments a
+       WHERE NOT EXISTS (SELECT 1 FROM attachment_refs r WHERE r.attachment_id = a.id)`,
+    );
+    for (const row of orphans) {
+      const attachmentId = asString(row.id, 'id');
+      this.driver.run(`DELETE FROM local_files WHERE attachment_id = ?`, [attachmentId]);
+      this.driver.run(`DELETE FROM attachments WHERE id = ?`, [attachmentId]);
+    }
   }
 
   async getNoteDocument(noteId: NoteId): Promise<NoteDocument | null> {
@@ -470,7 +611,7 @@ class SqliteLocalStore implements LocalStore {
 
   async renameTitle(noteId: NoteId, title: string): Promise<void> {
     this.requireOpen();
-    this.updateNoteFlags(noteId, { title });
+    this.updateNoteFlags(noteId, { title }, { touchEditedTime: true });
     this.refreshFts(noteId);
   }
 
@@ -1030,17 +1171,25 @@ class SqliteLocalStore implements LocalStore {
     );
   }
 
-  private updateNoteFlags(noteId: NoteId, patch: Record<string, SqlValue>): void {
-    const wallMs = this.clock.wallNow().unixMs;
+  /**
+   * The logical modified clock always advances, because sync orders metadata changes by it.
+   * The wall time is what the note list shows as "edited", so pinning, archiving, moving, and
+   * trashing leave it alone.
+   */
+  private updateNoteFlags(
+    noteId: NoteId,
+    patch: Record<string, SqlValue>,
+    options: { readonly touchEditedTime?: boolean } = {},
+  ): void {
     const logical = this.nextLogical();
     const assignments = Object.keys(patch).map((column) => `${column} = ?`);
     const params: SqlValue[] = Object.values(patch);
-    assignments.push(
-      'modified_wall_ms = ?',
-      'modified_logical_counter = ?',
-      'modified_logical_device = ?',
-    );
-    params.push(wallMs, logical.counter, logical.deviceId, noteId);
+    if (options.touchEditedTime === true) {
+      assignments.push('modified_wall_ms = ?');
+      params.push(this.clock.wallNow().unixMs);
+    }
+    assignments.push('modified_logical_counter = ?', 'modified_logical_device = ?');
+    params.push(logical.counter, logical.deviceId, noteId);
     this.driver.run(`UPDATE notes SET ${assignments.join(', ')} WHERE id = ?`, params);
   }
 
@@ -1155,6 +1304,14 @@ class SqliteLocalStore implements LocalStore {
       createdWallMs: asNumber(row.created_wall_ms, 'created_wall_ms'),
       modifiedWallMs: asNumber(row.modified_wall_ms, 'modified_wall_ms'),
       manualPosition: asString(row.manual_position, 'manual_position'),
+      snippet: typeof row.snippet === 'string' ? row.snippet : '',
+      tagIds:
+        typeof row.tag_ids === 'string'
+          ? row.tag_ids
+              .split(',')
+              .filter((id) => id.length > 0)
+              .map((id) => parseId<TagId>(id))
+          : [],
     };
   }
 
@@ -1252,10 +1409,12 @@ class SqliteLocalStore implements LocalStore {
 }
 
 function emptyDocument(noteId: NoteId): Document {
+  const docId = deriveId(noteId, 'doc', 0);
+  const paraId = deriveId(docId, 'paragraph', 0);
   return parseDocument({
     type: 'doc',
-    id: deriveId(noteId, 'doc', 0),
-    content: [],
+    id: docId,
+    content: [{ type: 'paragraph', id: paraId, content: [] }],
   });
 }
 

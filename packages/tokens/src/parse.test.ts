@@ -30,6 +30,9 @@ describe('tokens.json', () => {
     expect(tokens.type.editor.body.size).toBe(17);
     expect(tokens.type.editor.body.desktopLineHeight).toBe(1.6);
     expect(tokens.type.editor.body.desktopMeasure).toBe('72ch');
+    expect(tokens.type.ui.size.largeTitle).toBe(34);
+    expect(tokens.type.ui.size.footnote).toBe(13);
+    expect(tokens.type.ui.size.desktop).toBe(13);
   });
 
   it('keeps light and dark palettes as separate objects', () => {

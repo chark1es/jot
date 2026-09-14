@@ -20,6 +20,7 @@
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "test": "bun --bun vitest run",
+    "bench:vault": "bun benchmarks/vault-10k.ts",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {

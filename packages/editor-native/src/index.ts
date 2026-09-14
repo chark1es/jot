@@ -2,7 +2,9 @@ import type {
   AttachmentId,
   Document,
   Mark,
+  NodeId,
   NoteId,
+  SchemaNode,
   SchemaOperation,
   SchemaSelection,
   TransactionId,
@@ -34,12 +36,36 @@ export type EditorCommand =
   | { readonly name: 'toggleBlockquote' }
   | { readonly name: 'toggleTaskItemChecked' }
   | { readonly name: 'insertHorizontalRule' }
-  | { readonly name: 'insertImage'; readonly attachmentId: AttachmentId; readonly alt?: string };
+  | {
+      readonly name: 'insertImage';
+      readonly attachmentId: AttachmentId;
+      readonly alt?: string;
+      /** Local file the native editor draws until it can resolve the attachment by id. */
+      readonly path?: string;
+      readonly widthBasisPoints?: number;
+    }
+  | { readonly name: 'setImageWidth'; readonly nodeId: NodeId; readonly widthBasisPoints: number }
+  | { readonly name: 'removeBlock'; readonly nodeId: NodeId }
+  /** Schema blocks parsed from pasted Markdown. */
+  | { readonly name: 'insertBlocks'; readonly nodes: readonly SchemaNode[] };
 
 export type EditorCapabilities = {
   readonly undo: boolean;
   readonly redo: boolean;
   readonly ime: boolean;
+};
+
+/** One persisted undo or redo step handed back to the native editor when a note opens. */
+export type EditorHistoryEntry = {
+  readonly transactionId: TransactionId;
+  readonly forward: readonly SchemaOperation[];
+  readonly inverse: readonly SchemaOperation[];
+};
+
+export type SelectionBlock = {
+  readonly kind: string;
+  readonly headingLevel?: number;
+  readonly inQuote?: boolean;
 };
 
 export type EditorSnapshot = {
@@ -58,16 +84,32 @@ export type EditorEvent =
       readonly transactionId: TransactionId;
       readonly baseRevision: DocumentRevision;
       readonly operations: readonly SchemaOperation[];
-      readonly inverses: readonly SchemaOperation[];
+      readonly inverses?: readonly SchemaOperation[];
       readonly selection: SchemaSelection;
+      /** `undo` and `redo` replay a history entry; `historyOf` names the original transaction. */
+      readonly origin?: TransactionOrigin;
+      readonly historyOf?: TransactionId;
     }
   | {
       readonly type: 'selectionChanged';
       readonly selection: SchemaSelection;
       readonly activeMarks: readonly Mark[];
+      readonly block?: SelectionBlock;
+      readonly collapsed?: boolean;
+      readonly canUndo?: boolean;
+      readonly canRedo?: boolean;
     }
   | { readonly type: 'compositionChanged'; readonly active: boolean }
   | { readonly type: 'contentSizeChanged'; readonly height: number }
+  | { readonly type: 'focusChanged'; readonly focused: boolean }
+  | {
+      readonly type: 'imagePressed';
+      readonly nodeId: NodeId;
+      readonly attachmentId: AttachmentId;
+      readonly widthBasisPoints: number;
+    }
+  /** Multi-line or Markdown-looking paste. The host parses it and answers with `insertBlocks`. */
+  | { readonly type: 'pasteRequested'; readonly text?: string; readonly imagePath?: string }
   | { readonly type: 'recoverableError'; readonly code: string; readonly context: string };
 
 /**
@@ -110,6 +152,7 @@ export type {
 };
 
 export { applyOperations, invertOperation, invertOperations } from './apply-operations.js';
+export { documentDiffOperations } from './document-diff.js';
 export {
   MemoryDurableIntake,
   type DurableIntake,

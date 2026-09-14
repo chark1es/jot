@@ -156,4 +156,89 @@ describe('YjsCrdtDocument', () => {
     const mod: Record<string, unknown> = await import('./index.js');
     expect(Object.hasOwn(mod, 'Y')).toBe(false);
   });
+
+  it('applies the first keystroke into an empty note at the derived paragraph id', () => {
+    const paraId = deriveId(docId, 'paragraph', 0);
+    const textId = deriveId(paraId, 'text', 0);
+    const crdt = YjsCrdtDocument.fromCanonical(
+      parseDocument({
+        type: 'doc',
+        id: docId,
+        content: [],
+      }),
+    );
+    const caret = {
+      nodeId: paraId,
+      offsetUtf16: 0,
+      affinity: 'after' as const,
+      revision: 0,
+    };
+    crdt.applySchemaOperations(
+      [
+        {
+          type: 'replaceRange',
+          from: caret,
+          to: caret,
+          slice: {
+            nodes: [
+              {
+                type: 'text',
+                id: textId,
+                attrs: {},
+                content: [],
+                text: 'Hi',
+                marks: [],
+              },
+            ],
+          },
+          deletedSlice: { nodes: [] },
+        },
+      ],
+      createId<TransactionId>(),
+    );
+    const canonical = crdt.getCanonicalDocument();
+    expect(canonical.content[0]?.id).toBe(paraId);
+    expect(canonical.content[0]?.content[0]?.text).toBe('Hi');
+  });
+
+  it('insertText into an empty note at the derived paragraph id creates the paragraph', () => {
+    const paraId = deriveId(docId, 'paragraph', 0);
+    const crdt = YjsCrdtDocument.fromCanonical(
+      parseDocument({
+        type: 'doc',
+        id: docId,
+        content: [],
+      }),
+    );
+    crdt.applySchemaOperations([insertAt(paraId, 0, 'A')], createId<TransactionId>());
+    expect(crdt.getCanonicalDocument().content[0]?.content[0]?.text).toBe('A');
+  });
+
+  it('inserts a second paragraph on enter after the first keystroke', () => {
+    const { document, paraId } = seedParagraph('Hi');
+    const crdt = YjsCrdtDocument.fromCanonical(document);
+    const newPara = createId();
+    crdt.applySchemaOperations(
+      [
+        {
+          type: 'insertNode',
+          parentId: docId,
+          index: 1,
+          node: {
+            type: 'paragraph',
+            id: newPara,
+            attrs: {},
+            content: [],
+            marks: [],
+          },
+        },
+      ],
+      createId<TransactionId>(),
+    );
+    const canonical = crdt.getCanonicalDocument();
+    expect(canonical.content).toHaveLength(2);
+    expect(canonical.content[0]?.id).toBe(paraId);
+    expect(canonical.content[0]?.content[0]?.text).toBe('Hi');
+    expect(canonical.content[1]?.id).toBe(newPara);
+  });
 });

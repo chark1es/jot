@@ -1,4 +1,4 @@
-import { createId, isAllowedHref, parseDocument, SchemaError } from '@jot/schema';
+import { createId, deriveId, isAllowedHref, parseDocument, SchemaError } from '@jot/schema';
 import type {
   AddMarkOperation,
   AttrValue,
@@ -107,11 +107,44 @@ function blockText(block: SchemaNode): string {
   return text;
 }
 
+function emptyParagraph(id: NodeId): SchemaNode {
+  return {
+    type: 'paragraph',
+    id,
+    attrs: {},
+    content: [],
+    marks: [],
+  };
+}
+
+function ensureMissingParagraph(doc: Document, selection: SchemaSelection): Document {
+  if (doc.content.length > 0) {
+    return doc;
+  }
+  const targetsRoot = selection.nodeId === doc.id;
+  if (!targetsRoot && findById(doc, selection.nodeId) !== undefined) {
+    return doc;
+  }
+  const paragraphId = targetsRoot ? deriveId(doc.id, 'paragraph', 0) : selection.nodeId;
+  return asDocument({
+    ...doc,
+    content: [emptyParagraph(paragraphId)],
+  });
+}
+
 function resolveBlock(
   doc: Document,
   selection: SchemaSelection,
 ): { block: SchemaNode; offset: number } {
   const node = requireNode(doc, selection.nodeId);
+  if (node.id === doc.id) {
+    // A caret on the root means "the start of the body"; native editors report it for empty notes.
+    const first = doc.content[0];
+    if (first !== undefined && isTextBlock(first)) {
+      assertUtf16Offset(blockText(first), selection.offsetUtf16, 'position');
+      return { block: first, offset: selection.offsetUtf16 };
+    }
+  }
   if (node.type === 'text') {
     const loc = requireParent(doc, node.id);
     if (!isTextBlock(loc.parent)) {
@@ -375,9 +408,10 @@ function nextListItem(doc: Document, paragraph: SchemaNode): SchemaNode | undefi
 }
 
 function applyInsertText(doc: Document, op: InsertTextOperation): Document {
-  const resolved = resolveBlock(doc, op.position);
+  const next = ensureMissingParagraph(doc, op.position);
+  const resolved = resolveBlock(next, op.position);
   const nextBlock = insertIntoBlock(resolved.block, resolved.offset, op.text, op.storedMarks);
-  return asDocument(updateAt(doc, resolved.block.id, () => nextBlock));
+  return asDocument(updateAt(next, resolved.block.id, () => nextBlock));
 }
 
 function joinListItems(doc: Document, fromBlock: SchemaNode, toBlock: SchemaNode): Document {
@@ -416,21 +450,23 @@ function joinListItems(doc: Document, fromBlock: SchemaNode, toBlock: SchemaNode
 }
 
 function applyDeleteRange(doc: Document, op: DeleteRangeOperation): Document {
-  const from = resolveBlock(doc, op.from);
-  const to = resolveBlock(doc, op.to);
+  const next = ensureMissingParagraph(doc, op.from);
+  const from = resolveBlock(next, op.from);
+  const to = resolveBlock(next, op.to);
   if (from.block.id === to.block.id) {
     const nextBlock = deleteFromBlock(from.block, from.offset, to.offset);
-    return asDocument(updateAt(doc, from.block.id, () => nextBlock));
+    return asDocument(updateAt(next, from.block.id, () => nextBlock));
   }
   if (from.offset === blockText(from.block).length && to.offset === 0) {
-    return joinListItems(doc, from.block, to.block);
+    return joinListItems(next, from.block, to.block);
   }
   throw new SchemaError('invalid-range', 'deleteRange across unrelated blocks is not supported');
 }
 
 function applyReplaceRange(doc: Document, op: ReplaceRangeOperation): Document {
-  const from = resolveBlock(doc, op.from);
-  const deleted = applyDeleteRange(doc, {
+  const next = ensureMissingParagraph(doc, op.from);
+  const from = resolveBlock(next, op.from);
+  const deleted = applyDeleteRange(next, {
     type: 'deleteRange',
     from: op.from,
     to: op.to,
@@ -547,7 +583,8 @@ function capturedText(doc: Document, from: SchemaSelection, to: SchemaSelection)
 }
 
 function invertInsertText(doc: Document, op: InsertTextOperation): SchemaOperation[] {
-  const resolved = resolveBlock(doc, op.position);
+  const next = ensureMissingParagraph(doc, op.position);
+  const resolved = resolveBlock(next, op.position);
   const from = atBlock(resolved.block, resolved.offset, op.position.affinity);
   const to = atBlock(resolved.block, resolved.offset + op.text.length, op.position.affinity);
   return [
@@ -561,8 +598,9 @@ function invertInsertText(doc: Document, op: InsertTextOperation): SchemaOperati
 }
 
 function invertDeleteRange(doc: Document, op: DeleteRangeOperation): SchemaOperation[] {
-  const from = resolveBlock(doc, op.from);
-  const to = resolveBlock(doc, op.to);
+  const next = ensureMissingParagraph(doc, op.from);
+  const from = resolveBlock(next, op.from);
+  const to = resolveBlock(next, op.to);
   if (from.block.id === to.block.id) {
     const text = extractBlockText(from.block, from.offset, to.offset);
     return [
@@ -574,11 +612,11 @@ function invertDeleteRange(doc: Document, op: DeleteRangeOperation): SchemaOpera
       },
     ];
   }
-  const nextItem = nextListItem(doc, from.block);
+  const nextItem = nextListItem(next, from.block);
   if (nextItem === undefined) {
     return [{ ...op }];
   }
-  const list = requireParent(doc, nextItem.id);
+  const list = requireParent(next, nextItem.id);
   return [
     {
       type: 'insertNode',
@@ -596,8 +634,9 @@ function invertDeleteRange(doc: Document, op: DeleteRangeOperation): SchemaOpera
 }
 
 function invertReplaceRange(doc: Document, op: ReplaceRangeOperation): SchemaOperation[] {
-  const from = resolveBlock(doc, op.from);
-  const deletedText = capturedText(doc, op.from, op.to);
+  const next = ensureMissingParagraph(doc, op.from);
+  const from = resolveBlock(next, op.from);
+  const deletedText = capturedText(next, op.from, op.to);
   const inserted = sliceText(op.slice).text;
   const start = atBlock(from.block, from.offset, op.from.affinity);
   return [

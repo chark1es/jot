@@ -1,14 +1,33 @@
 import { createId, deriveId, parseDocument, SCHEMA_VERSION } from '@jot/schema';
-import type { Document, SchemaNode } from '@jot/schema';
+import type { Document, NoteId, SchemaNode } from '@jot/schema';
 
-export function emptyDocument(): Document {
-  const docId = createId();
+export function emptyDocument(noteId?: NoteId): Document {
+  const docId = noteId === undefined ? createId() : deriveId(noteId, 'doc', 0);
   const paraId = deriveId(docId, 'paragraph', 0);
   return parseDocument({
     type: 'doc',
     id: docId,
     content: [{ type: 'paragraph', id: paraId, content: [] }],
   });
+}
+
+/**
+ * Notes saved by older builds can have an empty body. The editor needs a paragraph to hold a
+ * caret, and TypeScript, Yjs, and both native editors must agree on its id.
+ */
+export function withEditableBody(document: Document): Document {
+  if (document.content.length > 0) {
+    return document;
+  }
+  return parseDocument({
+    ...document,
+    content: [{ type: 'paragraph', id: deriveId(document.id, 'paragraph', 0), content: [] }],
+  });
+}
+
+/** True when a note has no text, images, or other blocks worth keeping. */
+export function isBlankDocument(document: Document): boolean {
+  return document.content.every((node) => node.type === 'paragraph' && node.content.length === 0);
 }
 
 export function plainTextFromNode(node: SchemaNode): string {

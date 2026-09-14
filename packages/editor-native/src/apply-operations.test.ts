@@ -1,6 +1,7 @@
 import {
   canonicalizeDocumentToString,
   createId,
+  deriveId,
   parseDocument,
   parseId,
   SchemaError,
@@ -14,7 +15,7 @@ import type {
   SchemaSelection,
 } from '@jot/schema';
 import { describe, expect, it } from 'vitest';
-import { applyOperations } from './apply-operations.js';
+import { applyOperations, invertOperations } from './apply-operations.js';
 import { documentToLinear, linearToDocument } from './linear.js';
 
 function sel(nodeId: NodeId, offset: number): SchemaSelection {
@@ -374,5 +375,73 @@ describe('applyOperations', () => {
         },
       ]),
     ).toThrow(SchemaError);
+  });
+
+  it('applies and inverts the first keystroke into an empty note', () => {
+    const docId = parseId('aaaaaaaaaaaaaaaaaaaaaaaaaa');
+    const paraId = deriveId(docId, 'paragraph', 0);
+    const textId = deriveId(paraId, 'text', 0);
+    const empty = parseDocument({ type: 'doc', id: docId, content: [] });
+    const caret = sel(paraId, 0);
+    const op: SchemaOperation = {
+      type: 'replaceRange',
+      from: caret,
+      to: caret,
+      slice: {
+        nodes: [textNode(textId, 'Hi')],
+      },
+      deletedSlice: { nodes: [] },
+    };
+    const inverses = invertOperations(empty, [op]);
+    expect(inverses.length).toBeGreaterThan(0);
+    const typed = applyOperations(empty, [op]);
+    expect(typed.content[0]?.id).toBe(paraId);
+    expect(typed.content[0]?.content[0]?.text).toBe('Hi');
+    const undone = applyOperations(typed, inverses);
+    expect(undone.content[0]?.content[0]?.text ?? '').toBe('');
+  });
+
+  it('applies and inverts a keystroke whose caret sits on the root of an empty note', () => {
+    const docId = createId();
+    const empty = parseDocument({ type: 'doc', id: docId, content: [] });
+    const op: SchemaOperation = {
+      type: 'insertText',
+      position: sel(docId, 0),
+      text: 'Hello',
+      storedMarks: [],
+    };
+    const inverses = invertOperations(empty, [op]);
+    const typed = applyOperations(empty, [op]);
+    expect(typed.content[0]?.id).toBe(deriveId(docId, 'paragraph', 0));
+    expect(typed.content[0]?.content[0]?.text).toBe('Hello');
+    const undone = applyOperations(typed, inverses);
+    expect(undone.content[0]?.content[0]?.text ?? '').toBe('');
+  });
+
+  it('applies and inverts enter as insertNode after the first paragraph', () => {
+    const { doc, paragraphId } = simpleDoc('Hi');
+    const newPara = createId();
+    const op: SchemaOperation = {
+      type: 'insertNode',
+      parentId: doc.id,
+      index: 1,
+      node: {
+        type: 'paragraph',
+        id: newPara,
+        attrs: {},
+        content: [],
+        marks: [],
+      },
+    };
+    const inverses = invertOperations(doc, [op]);
+    const split = applyOperations(doc, [op]);
+    expect(split.content).toHaveLength(2);
+    expect(split.content[0]?.id).toBe(paragraphId);
+    expect(split.content[0]?.content[0]?.text).toBe('Hi');
+    expect(split.content[1]?.id).toBe(newPara);
+    expect(split.content[1]?.content ?? []).toEqual([]);
+    const undone = applyOperations(split, inverses);
+    expect(undone.content).toHaveLength(1);
+    expect(undone.content[0]?.id).toBe(paragraphId);
   });
 });

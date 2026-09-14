@@ -23,128 +23,84 @@ extension NSAttributedString.Key {
   static let jotQuoteDepth = NSAttributedString.Key("jot.quoteDepth")
 }
 
+/// Everything besides the document that decides how it is drawn.
+struct EditorRenderContext {
+  var imagePaths: [String: String] = [:]
+  var attachmentsDirectory: URL?
+  var containerWidth: CGFloat = 0
+  /// Widths shown while a pinch is still in progress, keyed by image node id.
+  var imageWidthOverrides: [String: Int] = [:]
+
+  func imageURL(attachmentId: String) -> URL? {
+    if let path = imagePaths[attachmentId] {
+      return URL(fileURLWithPath: path)
+    }
+    guard !attachmentId.isEmpty, let directory = attachmentsDirectory else {
+      return nil
+    }
+    let url = directory.appendingPathComponent(attachmentId)
+    return FileManager.default.fileExists(atPath: url.path) ? url : nil
+  }
+}
+
 enum AttributedBridge {
   static let indentStep: CGFloat = 24
 
-  static func attributedString(
-    from linear: LinearDocument,
-    imagePaths: [String: String] = [:],
-    containerWidth: CGFloat = 0
+  /// Storage layout: every block is followed by a newline unless it is the last block, and
+  /// that newline carries the attributes of the block before it. A paragraph's style comes
+  /// from the characters it owns, so empty blocks stay styled as themselves.
+  static func attributedString(from linear: LinearDocument, context: EditorRenderContext) -> NSAttributedString {
+    attributedBlocks(linear, range: 0..<linear.blocks.count, leadingSeparator: false, context: context)
+  }
+
+  /// Blocks `range` of `linear`, each followed by its newline when another block comes after
+  /// it. `leadingSeparator` adds the newline that belongs to the block before `range`.
+  static func attributedBlocks(
+    _ linear: LinearDocument,
+    range: Range<Int>,
+    leadingSeparator: Bool,
+    context: EditorRenderContext
   ) -> NSAttributedString {
-    let width = containerWidth > 1 ? containerWidth : max(UIScreen.main.bounds.width - 32, 280)
+    var context = context
+    if context.containerWidth <= 1 {
+      context.containerWidth = max(UIScreen.main.bounds.width - 40, 280)
+    }
+    let numbers = listMarkers(linear.blocks)
+    let labels = listAccessibilityLabels(linear.blocks)
     let result = NSMutableAttributedString()
-    for (index, block) in linear.blocks.enumerated() {
-      let listLabel = listAccessibilityLabel(at: index, in: linear.blocks)
-      if index > 0 {
-        result.append(NSAttributedString(string: "\n", attributes: paragraphAttributes(block, listLabel: listLabel)))
-      }
+    let count = linear.blocks.count
+    if leadingSeparator, range.lowerBound > 0 {
+      let previous = range.lowerBound - 1
       result.append(
-        blockString(block, listLabel: listLabel, imagePaths: imagePaths, containerWidth: width)
+        NSAttributedString(
+          string: "\n",
+          attributes: paragraphAttributes(linear.blocks[previous], marker: numbers[previous], listLabel: labels[previous])
+        )
       )
+    }
+    for index in range {
+      let block = linear.blocks[index]
+      let base = paragraphAttributes(block, marker: numbers[index], listLabel: labels[index])
+      result.append(blockString(block, base: base, marker: numbers[index], context: context))
+      if index + 1 < count {
+        result.append(NSAttributedString(string: "\n", attributes: base))
+      }
     }
     return result
   }
 
-  static func linearDocument(from attributed: NSAttributedString, documentId: String) -> LinearDocument {
-    if attributed.length == 0 {
-      return LinearDocument(id: documentId, blocks: [])
+  /// Font, color, and paragraph style for an empty block, so the caret has the right height.
+  static func typingAttributes(for block: LinearBlock) -> [NSAttributedString.Key: Any] {
+    let attrs = paragraphAttributes(block, marker: nil, listLabel: nil)
+    var typing: [NSAttributedString.Key: Any] = [:]
+    for key in [NSAttributedString.Key.font, .foregroundColor, .paragraphStyle] {
+      typing[key] = attrs[key]
     }
-    let string = attributed.string as NSString
-    var blocks: [LinearBlock] = []
-    string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: .byParagraphs) { _, range, _, _ in
-      let attrs = range.length > 0
-        ? attributed.attributes(at: range.location, effectiveRange: nil)
-        : [:]
-      var block = blockMetadata(attrs)
-      if block.id.isEmpty {
-        block.id = JotIds.create()
-      }
-      var runs: [LinearRun] = []
-      var cursor = range.location
-      let end = range.location + range.length
-      let leading = attrs[.jotLeadingAttach] as? Int ?? 0
-      if leading > 0, cursor < end {
-        cursor += min(leading, end - cursor)
-      }
-      while cursor < end {
-        var effective = NSRange()
-        let runAttrs = attributed.attributes(at: cursor, effectiveRange: &effective)
-        let clip = NSIntersectionRange(effective, NSRange(location: cursor, length: end - cursor))
-        if clip.length == 0 {
-          break
-        }
-        if let placeholder = runAttrs[.jotPlaceholder] as? String,
-           let data = placeholder.data(using: .utf8),
-           let raw = try? JSONSerialization.jsonObject(with: data),
-           let object = raw as? [String: Any] {
-          let node = SchemaNode.parseDictionary(object)
-          runs.append(
-            LinearRun(
-              text: LinearModel.objectReplacement,
-              id: node.id,
-              placeholderJSON: node.toJSON(),
-              fallbackText: node.plainText()
-            )
-          )
-        } else if let attachment = runAttrs[.attachment] as? TaskCheckboxAttachment {
-          block.checked = attachment.checked
-          block.id = attachment.nodeId
-        } else if let _ = runAttrs[.attachment] as? HorizontalRuleAttachment {
-          runs.append(LinearRun(text: LinearModel.objectReplacement, fallbackText: "divider"))
-        } else if let image = runAttrs[.attachment] as? ImageBlockAttachment {
-          runs.append(LinearRun(text: LinearModel.objectReplacement, fallbackText: image.alt))
-        } else if runAttrs[.attachment] != nil {
-          cursor = clip.location + clip.length
-          continue
-        } else {
-          let text = string.substring(with: clip)
-          var marks: [LinearMark] = []
-          if runAttrs[.jotBold] as? Int == 1 {
-            marks.append(LinearMark(type: "bold"))
-          }
-          if runAttrs[.jotItalic] as? Int == 1 {
-            marks.append(LinearMark(type: "italic"))
-          }
-          if runAttrs[.jotUnderline] as? Int == 1 {
-            marks.append(LinearMark(type: "underline"))
-          }
-          if runAttrs[.jotStrikethrough] as? Int == 1 {
-            marks.append(LinearMark(type: "strikethrough"))
-          }
-          if runAttrs[.jotInlineCode] as? Int == 1 {
-            marks.append(LinearMark(type: "inlineCode"))
-          }
-          if let href = runAttrs[.jotHref] as? String, !href.isEmpty {
-            let title = runAttrs[.jotLinkTitle] as? String ?? ""
-            marks.append(
-              LinearMark(type: "link", attrs: ["href": .string(href), "title": .string(title)])
-            )
-          } else if let url = runAttrs[.link] as? URL {
-            marks.append(
-              LinearMark(type: "link", attrs: ["href": .string(url.absoluteString), "title": .string("")])
-            )
-          }
-          runs.append(
-            LinearRun(
-              text: text,
-              marks: marks,
-              id: runAttrs[.jotTextId] as? String
-            )
-          )
-        }
-        cursor = clip.location + clip.length
-      }
-      if block.kind == .codeBlock, let last = blocks.last, last.id == block.id, last.kind == .codeBlock {
-        var merged = last
-        merged.runs.append(LinearRun(text: "\n"))
-        merged.runs.append(contentsOf: runs)
-        blocks[blocks.count - 1] = merged
-      } else {
-        block.runs = runs
-        blocks.append(block)
-      }
-    }
-    return LinearDocument(id: documentId, blocks: blocks)
+    return typing
+  }
+
+  static func bodyFont() -> UIFont {
+    font(block: LinearBlock(id: "", kind: .paragraph, indent: 0, runs: []), bold: false, italic: false, inlineCode: false)
   }
 
   static func schemaLocation(
@@ -154,135 +110,106 @@ enum AttributedBridge {
     linear: LinearDocument,
     revision: Int
   ) -> SchemaSelection {
-    if linear.blocks.isEmpty {
-      return SchemaSelection(nodeId: linear.id, offsetUtf16: 0, affinity: affinity, revision: revision)
-    }
-    var cursor = 0
-    for (index, block) in linear.blocks.enumerated() {
-      let leading = LinearModel.leadingCount(block)
-      let contentStart = cursor + leading
-      let contentEnd = contentStart + block.utf16Length
-      let separator = index < linear.blocks.count - 1 ? 1 : 0
-      if utf16Index < contentStart {
-        return SchemaSelection(nodeId: block.id, offsetUtf16: 0, affinity: affinity, revision: revision)
-      }
-      if utf16Index <= contentEnd {
-        return SchemaSelection(
-          nodeId: block.id,
-          offsetUtf16: utf16Index - contentStart,
-          affinity: affinity,
-          revision: revision
-        )
-      }
-      if utf16Index == contentEnd + separator && separator == 1 {
-        if affinity == "before" {
-          return SchemaSelection(nodeId: block.id, offsetUtf16: block.utf16Length, affinity: "before", revision: revision)
-        }
-      }
-      cursor = contentEnd + separator
-      _ = attributed
-    }
-    if let last = linear.blocks.last {
-      return SchemaSelection(nodeId: last.id, offsetUtf16: last.utf16Length, affinity: affinity, revision: revision)
-    }
-    return SchemaSelection(nodeId: linear.id, offsetUtf16: 0, affinity: affinity, revision: revision)
+    EditPlanner.location(displayIndex: utf16Index, affinity: affinity, linear: linear, revision: revision)
   }
 
   static func utf16Index(selection: SchemaSelection, linear: LinearDocument) -> Int {
-    var cursor = 0
-    for (index, block) in linear.blocks.enumerated() {
-      let leading = LinearModel.leadingCount(block)
-      if block.id == selection.nodeId || block.paragraphId == selection.nodeId {
-        return cursor + leading + min(max(0, selection.offsetUtf16), block.utf16Length)
-      }
-      cursor += leading + block.utf16Length
-      if index < linear.blocks.count - 1 {
-        cursor += 1
-      }
-    }
-    return cursor
+    EditPlanner.displayIndex(selection: selection, linear: linear)
   }
 
-  static func usedHeight(of textView: UITextView) -> CGFloat {
-    let width = max(textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right, 1)
-    if let layoutManager = textView.textLayoutManager {
-      var maxY: CGFloat = 0
-      layoutManager.enumerateTextLayoutFragments(
-        from: layoutManager.documentRange.location,
-        options: [.ensuresLayout]
-      ) { fragment in
-        maxY = max(maxY, fragment.layoutFragmentFrame.maxY)
-        return true
+  /// The marker text for every bullet and numbered item, keyed by block index. Numbers count
+  /// the items of one list at one depth, starting from the list's start attribute.
+  static func listMarkers(_ blocks: [LinearBlock]) -> [Int: String] {
+    var counters: [String: Int] = [:]
+    var markers: [Int: String] = [:]
+    let bullets = ["•", "◦", "▪"]
+    for (index, block) in blocks.enumerated() {
+      switch block.kind {
+      case .bulletItem:
+        markers[index] = bullets[block.indent % bullets.count]
+      case .orderedItem:
+        let key = "\(block.listId ?? "")|\(block.indent)"
+        let next = (counters[key] ?? (max(1, block.listStart ?? 1) - 1)) + 1
+        counters[key] = next
+        markers[index] = "\(next)."
+      default:
+        break
       }
-      let insets = textView.textContainerInset.top + textView.textContainerInset.bottom
-      return max(ceil(maxY + insets), textView.font?.lineHeight ?? 22)
     }
-    let size = textView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
-    return max(size.height, textView.font?.lineHeight ?? 22)
+    return markers
   }
 
-  private static func listAccessibilityLabel(at index: Int, in blocks: [LinearBlock]) -> String? {
-    let block = blocks[index]
-    guard LinearModel.isListKind(block.kind) else { return nil }
-    var positions: [Int] = []
-    for (i, candidate) in blocks.enumerated() {
-      if candidate.kind == block.kind && candidate.listId == block.listId && candidate.indent == block.indent {
-        positions.append(i)
+  private static func listAccessibilityLabels(_ blocks: [LinearBlock]) -> [Int: String] {
+    var groups: [String: [Int]] = [:]
+    for (index, block) in blocks.enumerated() where LinearModel.isListKind(block.kind) {
+      groups["\(block.kind.rawValue)|\(block.listId ?? "")|\(block.indent)", default: []].append(index)
+    }
+    var labels: [Int: String] = [:]
+    for members in groups.values {
+      for (position, index) in members.enumerated() {
+        labels[index] = "list, \(position + 1) of \(members.count)"
       }
     }
-    guard let item = positions.firstIndex(of: index) else {
-      return "list"
-    }
-    return "list, \(item + 1) of \(positions.count)"
+    return labels
+  }
+
+  private static func attachmentString(_ attachment: NSTextAttachment, attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+    let string = NSMutableAttributedString(attachment: attachment)
+    string.addAttributes(attributes, range: NSRange(location: 0, length: string.length))
+    return string
   }
 
   private static func blockString(
     _ block: LinearBlock,
-    listLabel: String?,
-    imagePaths: [String: String],
-    containerWidth: CGFloat
+    base: [NSAttributedString.Key: Any],
+    marker: String?,
+    context: EditorRenderContext
   ) -> NSAttributedString {
     let result = NSMutableAttributedString()
-    let base = paragraphAttributes(block, listLabel: listLabel)
     if !block.quoteChain.isEmpty {
-      result.append(NSAttributedString(attachment: QuoteHairlineAttachment(depth: block.quoteDepth)))
+      var attrs = base
+      attrs[.kern] = 10
+      result.append(attachmentString(QuoteHairlineAttachment(depth: block.quoteDepth), attributes: attrs))
     }
     if block.kind == .taskItem {
-      let attachment = TaskCheckboxAttachment(nodeId: block.id, checked: block.checked ?? 0)
-      result.append(NSAttributedString(attachment: attachment))
+      var attrs = base
+      attrs[.kern] = 8
+      result.append(attachmentString(TaskCheckboxAttachment(nodeId: block.id, checked: block.checked ?? 0), attributes: attrs))
+    } else if block.kind == .bulletItem || block.kind == .orderedItem {
+      var attrs = base
+      attrs[.kern] = ListMarkerAttachment.gap
+      result.append(attachmentString(ListMarkerAttachment(label: marker ?? "•", font: bodyFont()), attributes: attrs))
     }
-    if block.kind == .horizontalRule {
-      result.append(
-        NSAttributedString(attachment: HorizontalRuleAttachment(width: containerWidth))
-      )
+    switch block.kind {
+    case .horizontalRule:
+      result.append(attachmentString(HorizontalRuleAttachment(width: context.containerWidth), attributes: base))
       return result
-    }
-    if block.kind == .image {
+    case .image:
       let node = block.placeholderJSON.map { SchemaNode.parse($0) }
       let attachmentId = node?.attrs["attachmentId"]?.stringValue() ?? ""
-      let alt = node?.attrs["alt"]?.stringValue() ?? block.plainText
-      let bps = node?.attrs["widthBasisPoints"]?.intValue() ?? 10000
-      result.append(
-        NSAttributedString(
-          attachment: ImageBlockAttachment(
-            alt: alt,
-            path: imagePaths[attachmentId],
-            widthBasisPoints: bps,
-            containerWidth: containerWidth
-          )
-        )
+      let stored = node?.attrs["widthBasisPoints"]?.intValue() ?? 10000
+      let attachment = ImageBlockAttachment(
+        nodeId: block.id,
+        attachmentId: attachmentId,
+        alt: node?.attrs["alt"]?.stringValue() ?? block.plainText,
+        fileURL: context.imageURL(attachmentId: attachmentId),
+        widthBasisPoints: context.imageWidthOverrides[block.id] ?? stored,
+        containerWidth: context.containerWidth
       )
+      result.append(attachmentString(attachment, attributes: base))
       return result
+    case .placeholder:
+      if let json = block.placeholderJSON {
+        result.append(attachmentString(PlaceholderAttachment(json: json, fallback: block.plainText), attributes: base))
+        return result
+      }
+    default:
+      break
     }
-    if block.kind == .placeholder, let json = block.placeholderJSON {
-      let attachment = PlaceholderAttachment(json: json, fallback: block.plainText)
-      result.append(NSAttributedString(attachment: attachment))
-      return result
-    }
+    let checked = block.kind == .taskItem && block.checked == 1
     for run in block.runs {
       if let json = run.placeholderJSON {
-        let attachment = PlaceholderAttachment(json: json, fallback: run.fallbackText)
-        result.append(NSAttributedString(attachment: attachment))
+        result.append(attachmentString(PlaceholderAttachment(json: json, fallback: run.fallbackText), attributes: base))
         continue
       }
       var attrs = base
@@ -301,13 +228,16 @@ enum AttributedBridge {
       if underline {
         attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
       }
-      if strike {
+      if strike || checked {
         attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+      }
+      if inlineCode && block.kind != .codeBlock {
+        attrs[.backgroundColor] = UIColor.tertiarySystemFill
       }
       if let link = run.marks.first(where: \.isLink), let href = link.href, !href.isEmpty {
         attrs[.jotHref] = href
         attrs[.jotLinkTitle] = link.title
-        attrs[.foregroundColor] = UIColor.link
+        attrs[.foregroundColor] = EditorTheme.accent
         attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
         if let url = URL(string: href) {
           attrs[.link] = url
@@ -315,42 +245,72 @@ enum AttributedBridge {
       }
       result.append(NSAttributedString(string: run.text, attributes: attrs))
     }
-    if result.length == 0 {
-      result.append(NSAttributedString(string: "", attributes: base))
-    }
     return result
   }
 
-  private static func paragraphAttributes(_ block: LinearBlock, listLabel: String? = nil) -> [NSAttributedString.Key: Any] {
+  private static func textColor(for block: LinearBlock) -> UIColor {
+    if block.kind == .taskItem && block.checked == 1 {
+      return .secondaryLabel
+    }
+    if !block.quoteChain.isEmpty {
+      return .secondaryLabel
+    }
+    return .label
+  }
+
+  private static func paragraphStyle(_ block: LinearBlock, marker: String?) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
-    let indent = CGFloat(block.indent) * indentStep + CGFloat(block.quoteDepth) * indentStep
+    let indent = CGFloat(block.indent) * indentStep
+    style.lineSpacing = 3
+    style.paragraphSpacing = 10
+    style.headIndent = indent
+    style.firstLineHeadIndent = indent
     switch block.kind {
     case .bulletItem, .orderedItem:
-      style.headIndent = indent + indentStep
-      style.firstLineHeadIndent = indent + indentStep
-      let marker: NSTextList.MarkerFormat = block.kind == .orderedItem ? .decimal : .disc
-      style.textLists = [NSTextList(markerFormat: marker, options: 0)]
+      // Wrapped lines line up with the text after the marker.
+      let markerWidth = ListMarkerAttachment.width(label: marker ?? "•", font: bodyFont())
+      style.headIndent = indent + markerWidth + ListMarkerAttachment.gap
+      style.paragraphSpacing = 4
     case .taskItem:
-      style.headIndent = indent + indentStep + 8
-      style.firstLineHeadIndent = indent
+      style.headIndent = indent + 30
+      style.paragraphSpacing = 6
     case .codeBlock:
-      style.headIndent = indent
-      style.firstLineHeadIndent = indent
+      style.lineSpacing = 2
+      style.paragraphSpacing = 0
+      style.headIndent = indent + 8
+      style.firstLineHeadIndent = indent + 8
     case .heading:
-      style.paragraphSpacingBefore = 16
-      style.paragraphSpacing = 8
-    default:
-      style.paragraphSpacing = 8
-      style.headIndent = indent
-      style.firstLineHeadIndent = indent
+      style.paragraphSpacingBefore = (block.headingLevel ?? 1) <= 2 ? 12 : 8
+      style.paragraphSpacing = 6
+    case .image:
+      style.alignment = .center
+      style.paragraphSpacingBefore = 6
+      style.paragraphSpacing = 14
+    case .horizontalRule:
+      style.paragraphSpacingBefore = 4
+      style.paragraphSpacing = 12
+    case .paragraph, .placeholder:
+      break
     }
+    if !block.quoteChain.isEmpty {
+      // The hairline attachment sits in the first line; wrapped lines align with the quoted text.
+      style.headIndent += 13
+    }
+    return style
+  }
+
+  private static func paragraphAttributes(
+    _ block: LinearBlock,
+    marker: String?,
+    listLabel: String?
+  ) -> [NSAttributedString.Key: Any] {
     var attrs: [NSAttributedString.Key: Any] = [
-      .paragraphStyle: style,
+      .paragraphStyle: paragraphStyle(block, marker: marker),
       .jotNodeId: block.id,
       .jotKind: block.kind.rawValue,
       .jotIndent: block.indent,
-      .foregroundColor: UIColor.label,
-      .font: font(block: block, bold: block.kind == .heading, italic: false, inlineCode: false)
+      .foregroundColor: textColor(for: block),
+      .font: font(block: block, bold: false, italic: false, inlineCode: false)
     ]
     var spoken: [String] = []
     if let level = block.headingLevel {
@@ -382,103 +342,72 @@ enum AttributedBridge {
     if let listId = block.listId {
       attrs[.jotListId] = listId
     }
-    if block.kind == .taskItem {
-      attrs[.jotLeadingAttach] = LinearModel.leadingCount(block)
-    } else if !block.quoteChain.isEmpty {
-      attrs[.jotLeadingAttach] = LinearModel.leadingCount(block)
+    let leading = LinearModel.leadingCount(block)
+    if leading > 0 {
+      attrs[.jotLeadingAttach] = leading
     }
-    if let json = block.placeholderJSON, let encoded = CanonicalJSON.stringify(json).data(using: .utf8) {
-      attrs[.jotPlaceholder] = String(data: encoded, encoding: .utf8) ?? ""
+    if block.kind == .codeBlock {
+      attrs[.backgroundColor] = UIColor.tertiarySystemFill
+    }
+    if let json = block.placeholderJSON {
+      attrs[.jotPlaceholder] = CanonicalJSON.stringify(json)
     }
     return attrs
   }
 
-  private static func blockMetadata(_ attrs: [NSAttributedString.Key: Any]) -> LinearBlock {
-    let kind = LinearBlockKind(rawValue: attrs[.jotKind] as? String ?? "paragraph") ?? .paragraph
-    return LinearBlock(
-      id: attrs[.jotNodeId] as? String ?? "",
-      kind: kind,
-      headingLevel: attrs[.jotHeadingLevel] as? Int,
-      listStart: attrs[.jotListStart] as? Int,
-      checked: attrs[.jotChecked] as? Int,
-      indent: attrs[.jotIndent] as? Int ?? 0,
-      runs: [],
-      languageId: attrs[.jotLanguageId] as? String,
-      paragraphId: attrs[.jotParagraphId] as? String,
-      listId: attrs[.jotListId] as? String
-    )
-  }
-
   private static func font(block: LinearBlock, bold: Bool, italic: Bool, inlineCode: Bool) -> UIFont {
     if block.kind == .codeBlock || inlineCode {
-      let size: CGFloat
-      if block.kind == .heading {
-        switch block.headingLevel ?? 1 {
-        case 1: size = 34
-        case 2: size = 28
-        case 3: size = 22
-        case 4: size = 20
-        case 5: size = 18
-        default: size = 16
-        }
-      } else {
-        size = block.kind == .codeBlock ? 15 : 17
-      }
-      let weight: UIFont.Weight = bold ? .semibold : .regular
-      var font = UIFont.monospacedSystemFont(ofSize: size, weight: weight)
+      let size: CGFloat = block.kind == .codeBlock ? 15 : 15.5
+      var font = UIFont.monospacedSystemFont(ofSize: size, weight: bold ? .semibold : .regular)
       if italic, let descriptor = font.fontDescriptor.withSymbolicTraits(.traitItalic) {
         font = UIFont(descriptor: descriptor, size: size)
       }
-      return font
+      return UIFontMetrics(forTextStyle: .body).scaledFont(for: font)
     }
-    let size: CGFloat
-    var weight: UIFont.Weight = bold ? .semibold : .regular
+    var size: CGFloat = 17
+    var weight: UIFont.Weight = .regular
     var textStyle: UIFont.TextStyle = .body
     if block.kind == .heading {
       switch block.headingLevel ?? 1 {
       case 1:
-        size = 34
-        textStyle = .title1
-        weight = .bold
-      case 2:
         size = 28
-        textStyle = .title2
         weight = .bold
-      case 3:
+        textStyle = .title1
+      case 2:
         size = 22
-        textStyle = .title3
-        weight = .semibold
-      case 4:
+        weight = .bold
+        textStyle = .title2
+      case 3:
         size = 20
-        textStyle = .headline
         weight = .semibold
-      case 5:
-        size = 18
-        textStyle = .headline
+        textStyle = .title3
+      case 4, 5:
+        size = 17
         weight = .semibold
+        textStyle = .headline
       default:
-        size = 16
-        textStyle = .subheadline
+        size = 15
         weight = .semibold
+        textStyle = .subheadline
       }
-    } else {
-      size = 17
     }
-    var descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: textStyle)
-    if block.kind != .codeBlock, let serif = descriptor.withDesign(.serif) {
-      descriptor = serif
+    var font = UIFont.systemFont(ofSize: size, weight: weight)
+    if let serif = font.fontDescriptor.withDesign(.serif) {
+      font = UIFont(descriptor: serif, size: size)
     }
-    var traits = descriptor.symbolicTraits
-    if bold || block.kind == .heading {
+    var traits = font.fontDescriptor.symbolicTraits
+    var changed = false
+    if bold && block.kind != .heading {
       traits.insert(.traitBold)
+      changed = true
     }
     if italic {
       traits.insert(.traitItalic)
+      changed = true
     }
-    if let withTraits = descriptor.withSymbolicTraits(traits) {
-      descriptor = withTraits
+    if changed, let descriptor = font.fontDescriptor.withSymbolicTraits(traits) {
+      font = UIFont(descriptor: descriptor, size: size)
     }
-    _ = weight
-    return UIFont(descriptor: descriptor, size: size)
+    return UIFontMetrics(forTextStyle: textStyle).scaledFont(for: font)
   }
 }

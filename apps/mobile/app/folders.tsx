@@ -12,23 +12,26 @@ import {
   type FolderTreeNode,
 } from '@jot/ui-mobile';
 import type { FolderId } from '@jot/schema';
-import { ActionSheet } from '../src/components/ActionSheet';
+import { ActionSheet, type ActionItem } from '../src/components/ActionSheet';
 import { AppHeader } from '../src/components/AppHeader';
 import { ErrorBanner } from '../src/components/ErrorBanner';
+import { Glyph } from '../src/components/Glyph';
 import { PromptModal } from '../src/components/PromptModal';
-import { editorBodySize, touchMin, uiFontFamily, usePalette } from '../src/theme';
+import { pressedStyle, touchMin, typeSize, uiFontFamily, usePalette } from '../src/theme';
 import { useVault } from '../src/vault-context';
+
+type Sheet = 'actions' | 'move' | 'delete';
+type Prompt =
+  { readonly kind: 'create'; readonly parentId: FolderId | null } | { readonly kind: 'rename' };
 
 export default function FoldersScreen() {
   const palette = usePalette();
   const vault = useVault();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [parentId, setParentId] = useState<FolderId | null>(null);
+  const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [activeId, setActiveId] = useState<FolderId | null>(null);
-  const [moveOpen, setMoveOpen] = useState(false);
+  const [sheet, setSheet] = useState<Sheet | null>(null);
 
   const records = useMemo(
     () =>
@@ -40,8 +43,17 @@ export default function FoldersScreen() {
       })),
     [vault.folders],
   );
-  const tree = useMemo(() => flattenFolderTree(buildFolderTree(records)), [records]);
   const roots = useMemo(() => buildFolderTree(records), [records]);
+  const tree = useMemo(() => flattenFolderTree(roots), [roots]);
+  const counts = useMemo(() => {
+    const byFolder = new Map<string, number>();
+    for (const note of vault.notes) {
+      if (note.folderId !== null && !note.trashed && !note.archived) {
+        byFolder.set(note.folderId, (byFolder.get(note.folderId) ?? 0) + 1);
+      }
+    }
+    return byFolder;
+  }, [vault.notes]);
 
   const active = vault.folders.find((folder) => folder.id === activeId);
 
@@ -59,180 +71,291 @@ export default function FoldersScreen() {
     return ids;
   }, [activeId, roots]);
 
-  return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: palette.canvas }]} edges={['top', 'bottom']}>
-      <StatusBar style={palette.ink === tokens.color.dark.ink ? 'light' : 'dark'} />
-      <AppHeader
-        palette={palette}
-        title="Folders"
-        leftLabel="Notes"
-        onLeft={() => {
-          router.back();
-        }}
-        rightLabel="New"
-        onRight={() => {
-          setParentId(null);
-          setName('');
-          setCreateOpen(true);
-        }}
-      />
-      {error !== null ? (
-        <ErrorBanner palette={palette} message={error} actionLabel="Dismiss" onAction={() => { setError(null); }} />
-      ) : null}
-      <FlatList
-        data={tree}
-        keyExtractor={(item) => item.folder.id}
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: palette.inkMuted, fontFamily: uiFontFamily() }]}>
-            No folders yet. Nested folders can hold notes.
-          </Text>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => {
-              setActiveId(item.folder.id as FolderId);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={item.folder.name}
-            style={[styles.row, { paddingLeft: tokens.spacing.scale.space16 + item.depth * tokens.spacing.scale.space16 }]}
-          >
-            <Text style={[styles.name, { color: palette.ink, fontFamily: uiFontFamily() }]}>
-              {item.folder.name}
-            </Text>
-          </Pressable>
-        )}
-        ItemSeparatorComponent={() => (
-          <View style={[styles.separator, { backgroundColor: palette.hairline }]} />
-        )}
-      />
-      <ActionSheet
-        palette={palette}
-        visible={active !== undefined && !createOpen && !renameOpen && !moveOpen}
-        title={active?.name ?? ''}
-        actions={
-          active === undefined
-            ? []
-            : [
-                {
-                  key: 'child',
-                  label: 'New subfolder',
-                  onPress: () => {
-                    setParentId(active.id);
-                    setName('');
-                    setCreateOpen(true);
-                  },
-                },
-                {
-                  key: 'rename',
-                  label: 'Rename',
-                  onPress: () => {
-                    setName(active.name);
-                    setRenameOpen(true);
-                  },
-                },
-                {
-                  key: 'move',
-                  label: 'Move',
-                  onPress: () => {
-                    setMoveOpen(true);
-                  },
-                },
-              ]
-        }
-        onClose={() => {
-          if (!createOpen && !renameOpen && !moveOpen) {
-            setActiveId(null);
-          }
-        }}
-      />
-      <PromptModal
-        palette={palette}
-        visible={createOpen}
-        title={parentId === null ? 'New folder' : 'New subfolder'}
-        placeholder="Name"
-        value={name}
-        onChange={setName}
-        confirmLabel="Create"
-        onCancel={() => {
-          setCreateOpen(false);
-          setActiveId(null);
-        }}
-        onConfirm={() => {
-          void (async () => {
-            try {
-              await vault.createFolder(name, parentId);
-              setCreateOpen(false);
-              setActiveId(null);
-            } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'Could not create that folder.');
-            }
-          })();
-        }}
-      />
-      <PromptModal
-        palette={palette}
-        visible={renameOpen}
-        title="Rename folder"
-        placeholder="Name"
-        value={name}
-        onChange={setName}
-        confirmLabel="Rename"
-        onCancel={() => {
-          setRenameOpen(false);
-          setActiveId(null);
-        }}
-        onConfirm={() => {
-          if (activeId === null) {
-            return;
-          }
-          void (async () => {
-            try {
-              await vault.renameFolder(activeId, name);
-              setRenameOpen(false);
-              setActiveId(null);
-            } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'Could not rename that folder.');
-            }
-          })();
-        }}
-      />
-      <ActionSheet
-        palette={palette}
-        visible={moveOpen}
-        title="Move folder"
-        actions={[
+  const run = async (task: () => Promise<unknown>, failure: string): Promise<boolean> => {
+    setError(null);
+    try {
+      await task();
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : failure);
+      return false;
+    }
+  };
+
+  const openPrompt = (next: Prompt, initial: string) => {
+    setName(initial);
+    setPrompt(next);
+  };
+
+  const sheetContent = ((): {
+    title: string;
+    message?: string;
+    align: 'center' | 'leading';
+    actions: ActionItem[];
+  } => {
+    if (active === undefined || sheet === null) {
+      return { title: '', align: 'center', actions: [] };
+    }
+    if (sheet === 'move') {
+      return {
+        title: `Move "${active.name}"`,
+        align: 'leading',
+        actions: [
           {
             key: 'root',
             label: 'Top level',
+            selected: active.parentId === null,
             onPress: () => {
-              if (activeId !== null) {
-                void vault.moveFolder(activeId, null).catch((caught: unknown) => {
-                  setError(caught instanceof Error ? caught.message : 'Could not move that folder.');
-                });
-              }
-              setMoveOpen(false);
-              setActiveId(null);
+              void run(() => vault.moveFolder(active.id, null), 'Jot could not move that folder.');
             },
           },
           ...tree
             .filter((node) => !blocked.has(node.folder.id))
             .map((node) => ({
               key: node.folder.id,
-              label: `${'  '.repeat(node.depth)}${node.folder.name}`,
+              label: `${'    '.repeat(node.depth)}${node.folder.name}`,
+              selected: active.parentId === node.folder.id,
               onPress: () => {
-                if (activeId !== null) {
-                  void vault.moveFolder(activeId, node.folder.id as FolderId).catch((caught: unknown) => {
-                    setError(caught instanceof Error ? caught.message : 'Could not move that folder.');
-                  });
-                }
-                setMoveOpen(false);
-                setActiveId(null);
+                void run(
+                  () => vault.moveFolder(active.id, node.folder.id as FolderId),
+                  'Jot could not move that folder.',
+                );
               },
             })),
-        ]}
+        ],
+      };
+    }
+    if (sheet === 'delete') {
+      return {
+        title: `Delete "${active.name}"?`,
+        message: 'Its subfolders are deleted too. The notes inside move to No folder.',
+        align: 'center',
+        actions: [
+          {
+            key: 'delete',
+            label: 'Delete folder',
+            destructive: true,
+            onPress: () => {
+              void run(() => vault.deleteFolder(active.id), 'Jot could not delete that folder.');
+            },
+          },
+        ],
+      };
+    }
+    return {
+      title: active.name,
+      align: 'center',
+      actions: [
+        {
+          key: 'child',
+          label: 'New subfolder',
+          onPress: () => {
+            openPrompt({ kind: 'create', parentId: active.id }, '');
+          },
+        },
+        {
+          key: 'rename',
+          label: 'Rename',
+          onPress: () => {
+            openPrompt({ kind: 'rename' }, active.name);
+          },
+        },
+        {
+          key: 'move',
+          label: 'Move',
+          keepOpen: true,
+          onPress: () => {
+            setSheet('move');
+          },
+        },
+        {
+          key: 'delete',
+          label: 'Delete folder',
+          destructive: true,
+          keepOpen: true,
+          onPress: () => {
+            setSheet('delete');
+          },
+        },
+      ],
+    };
+  })();
+
+  return (
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: palette.canvas }]}
+      edges={['top', 'bottom']}
+    >
+      <StatusBar style={palette.ink === tokens.color.dark.ink ? 'light' : 'dark'} />
+      <AppHeader
+        palette={palette}
+        title="Folders"
+        leftLabel="Notes"
+        leftGlyph="back"
+        onLeft={() => {
+          router.back();
+        }}
+        rightLabel="New folder"
+        rightGlyph="new"
+        onRight={() => {
+          setName('');
+          setPrompt({ kind: 'create', parentId: null });
+        }}
+      />
+      {error !== null ? (
+        <ErrorBanner
+          palette={palette}
+          message={error}
+          actionLabel="Dismiss"
+          onAction={() => {
+            setError(null);
+          }}
+        />
+      ) : null}
+      <FlatList
+        data={tree}
+        keyExtractor={(item) => item.folder.id}
+        contentContainerStyle={tree.length === 0 ? styles.listEmpty : undefined}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={[styles.emptyTitle, { color: palette.ink, fontFamily: uiFontFamily() }]}>
+              No folders
+            </Text>
+            <Text
+              style={[styles.emptyCopy, { color: palette.inkMuted, fontFamily: uiFontFamily() }]}
+            >
+              Folders keep related notes together. They can hold other folders.
+            </Text>
+            <Pressable
+              onPress={() => {
+                setName('');
+                setPrompt({ kind: 'create', parentId: null });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="New folder"
+              style={({ pressed }) => [
+                styles.emptyAction,
+                { backgroundColor: palette.accent },
+                pressedStyle(pressed),
+              ]}
+            >
+              <Text
+                style={[
+                  styles.emptyActionLabel,
+                  { color: palette.canvas, fontFamily: uiFontFamily() },
+                ]}
+              >
+                New folder
+              </Text>
+            </Pressable>
+          </View>
+        }
+        ItemSeparatorComponent={() => (
+          <View style={[styles.separator, { backgroundColor: palette.hairline }]} />
+        )}
+        renderItem={({ item }) => {
+          const count = counts.get(item.folder.id) ?? 0;
+          return (
+            <View
+              style={[
+                styles.row,
+                {
+                  paddingLeft:
+                    tokens.spacing.scale.space16 + item.depth * tokens.spacing.scale.space24,
+                },
+              ]}
+            >
+              <Pressable
+                onPress={() => {
+                  router.navigate({ pathname: '/', params: { folder: item.folder.id } });
+                }}
+                onLongPress={() => {
+                  setActiveId(item.folder.id as FolderId);
+                  setSheet('actions');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.folder.name}, ${String(count)} ${count === 1 ? 'note' : 'notes'}`}
+                accessibilityHint="Opens the notes in this folder."
+                style={({ pressed }) => [styles.rowMain, pressedStyle(pressed)]}
+              >
+                <Glyph name="folders" color={palette.accent} size={22} />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.name, { color: palette.ink, fontFamily: uiFontFamily() }]}
+                >
+                  {item.folder.name}
+                </Text>
+                <Text
+                  style={[styles.count, { color: palette.inkMuted, fontFamily: uiFontFamily() }]}
+                >
+                  {count}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setActiveId(item.folder.id as FolderId);
+                  setSheet('actions');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.folder.name} options`}
+                style={({ pressed }) => [styles.more, pressedStyle(pressed)]}
+              >
+                <Glyph name="more" color={palette.inkMuted} size={22} />
+              </Pressable>
+            </View>
+          );
+        }}
+      />
+      <ActionSheet
+        palette={palette}
+        visible={sheetContent.actions.length > 0}
+        title={sheetContent.title}
+        {...(sheetContent.message === undefined ? {} : { message: sheetContent.message })}
+        align={sheetContent.align}
+        actions={sheetContent.actions}
         onClose={() => {
-          setMoveOpen(false);
-          setActiveId(null);
+          setSheet(null);
+        }}
+      />
+      <PromptModal
+        palette={palette}
+        visible={prompt !== null}
+        title={
+          prompt?.kind === 'rename'
+            ? 'Rename folder'
+            : prompt?.parentId === null
+              ? 'New folder'
+              : 'New subfolder'
+        }
+        placeholder="Name"
+        value={name}
+        onChange={setName}
+        confirmLabel={prompt?.kind === 'rename' ? 'Rename' : 'Create'}
+        onCancel={() => {
+          setPrompt(null);
+        }}
+        onConfirm={() => {
+          const current = prompt;
+          if (current === null) {
+            return;
+          }
+          void (async () => {
+            const ok =
+              current.kind === 'create'
+                ? await run(
+                    () => vault.createFolder(name, current.parentId),
+                    'Jot could not create that folder.',
+                  )
+                : activeId === null
+                  ? false
+                  : await run(
+                      () => vault.renameFolder(activeId, name),
+                      'Jot could not rename that folder.',
+                    );
+            if (ok) {
+              setPrompt(null);
+            }
+          })();
         }}
       />
     </SafeAreaView>
@@ -244,18 +367,64 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   row: {
-    minHeight: touchMin,
-    justifyContent: 'center',
-    paddingRight: tokens.spacing.scale.space16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: tokens.spacing.scale.space4,
+  },
+  rowMain: {
+    flex: 1,
+    minHeight: touchMin + tokens.spacing.scale.space4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.spacing.scale.space12,
   },
   name: {
-    fontSize: editorBodySize,
+    flex: 1,
+    fontSize: typeSize.body,
+  },
+  count: {
+    fontSize: typeSize.subhead,
+    fontVariant: ['tabular-nums'],
+  },
+  more: {
+    minWidth: touchMin,
+    minHeight: touchMin,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   separator: {
     height: StyleSheet.hairlineWidth,
+    marginLeft: tokens.spacing.scale.space48 + tokens.spacing.scale.space2,
+  },
+  listEmpty: {
+    flexGrow: 1,
   },
   empty: {
-    fontSize: editorBodySize,
-    padding: tokens.spacing.scale.space16,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: tokens.spacing.scale.space32,
+    gap: tokens.spacing.scale.space8,
+    paddingBottom: tokens.spacing.scale.space64,
+  },
+  emptyTitle: {
+    fontSize: typeSize.title + tokens.spacing.scale.space4,
+    fontWeight: '600',
+  },
+  emptyCopy: {
+    fontSize: typeSize.subhead,
+    textAlign: 'center',
+  },
+  emptyAction: {
+    minHeight: touchMin,
+    paddingHorizontal: tokens.spacing.scale.space24,
+    borderRadius: tokens.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: tokens.spacing.scale.space12,
+  },
+  emptyActionLabel: {
+    fontSize: typeSize.body,
+    fontWeight: '600',
   },
 });

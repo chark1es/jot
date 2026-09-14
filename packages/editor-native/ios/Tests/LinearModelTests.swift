@@ -21,6 +21,15 @@ enum LinearModelTests {
     try insertHorizontalRuleCommand()
     try toggleBlockquoteCommand()
     try compositionSessionNoOps()
+    try firstKeystrokeInEmptyNoteUsesDerivedParagraph()
+    try toggleBoldRemovesWhenWholeRangeIsBold()
+    try inlineMarkdownBold()
+    try inlineMarkdownItalicIgnoresSnakeCase()
+    try inlineMarkdownCodeAndLink()
+    try dividerInputRule()
+    try imageWidthCommand()
+    try insertBlocksSplitsParagraph()
+    try preciseInverseRestoresMarksAndBlocks()
   }
 
   static func roundTripParagraphBold() throws {
@@ -573,12 +582,267 @@ enum LinearModelTests {
       throw TestError.failed("hr insert ops")
     }
     try LinearModel.apply(plan.operations, to: &linear)
-    guard linear.blocks.count == 2, linear.blocks[1].kind == .horizontalRule else {
+    guard linear.blocks.count == 3,
+          linear.blocks[1].kind == .horizontalRule,
+          linear.blocks[2].kind == .paragraph,
+          linear.blocks[2].plainText.isEmpty else {
       throw TestError.failed("hr insert kind")
     }
     let tree = LinearModel.linearToDocument(linear)
-    guard tree.content.count == 2, tree.content[1].type == "horizontalRule" else {
+    guard tree.content.count == 3, tree.content[1].type == "horizontalRule" else {
       throw TestError.failed("hr insert schema")
+    }
+    if plan.selectionAfter?.nodeId != linear.blocks[2].id {
+      throw TestError.failed("hr insert caret")
+    }
+  }
+
+  static func firstKeystrokeInEmptyNoteUsesDerivedParagraph() throws {
+    let docId = "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+    let empty = SchemaNode.parseDictionary(["type": "doc", "id": docId, "content": [Any]()])
+    var linear = LinearModel.documentToLinear(empty)
+    try LinearModel.apply(
+      [.insertText(position: SchemaSelection(nodeId: docId, offsetUtf16: 0, affinity: "after", revision: 0), text: "Hi", storedMarks: [])],
+      to: &linear
+    )
+    guard linear.blocks.count == 1,
+          linear.blocks[0].id == LinearModel.bodyParagraphId(docId),
+          linear.blocks[0].plainText == "Hi" else {
+      throw TestError.failed("empty note first keystroke")
+    }
+    if LinearModel.withEditableBody(LinearModel.documentToLinear(empty)).blocks.first?.id != LinearModel.bodyParagraphId(docId) {
+      throw TestError.failed("editable body id")
+    }
+  }
+
+  static func toggleBoldRemovesWhenWholeRangeIsBold() throws {
+    var linear = paragraphDoc([text("ab", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa"), text("cd", id: "amaaaaaaaaaaaaaaaaaaaaaaaa", marks: ["bold"])])
+    let plan = LinearCommands.commandPlan(
+      name: "toggleBold",
+      value: nil,
+      linear: linear,
+      selection: caretAt(2),
+      selectionEnd: caretAt(4),
+      storedMarks: []
+    )
+    guard case .removeMark = plan.operations.first else {
+      throw TestError.failed("toggle bold should remove a mark the whole range has")
+    }
+    try LinearModel.apply(plan.operations, to: &linear)
+    if linear.blocks[0].runs.contains(where: { !$0.marks.isEmpty }) {
+      throw TestError.failed("bold still present")
+    }
+  }
+
+  static func inlineMarkdownBold() throws {
+    var linear = paragraphDoc([text("say **bold*", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    guard let plan = LinearCommands.inlineMarkdownRule(typed: "*", linear: linear, selection: caretAt(11), storedMarks: []) else {
+      throw TestError.failed("bold rule miss")
+    }
+    try LinearModel.apply(plan.operations, to: &linear)
+    guard linear.blocks[0].plainText == "say bold" else {
+      throw TestError.failed("bold delimiters not removed")
+    }
+    guard LinearModel.rangeHasMark("bold", from: caretAt(4), to: caretAt(8), in: linear),
+          !LinearModel.rangeHasMark("bold", from: caretAt(0), to: caretAt(4), in: linear) else {
+      throw TestError.failed("bold range")
+    }
+    if plan.selectionAfter?.offsetUtf16 != 8 {
+      throw TestError.failed("bold caret")
+    }
+    let partial = paragraphDoc([text("**bold", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    if LinearCommands.inlineMarkdownRule(typed: "*", linear: partial, selection: caretAt(6), storedMarks: []) != nil {
+      throw TestError.failed("first closing star fired italic")
+    }
+  }
+
+  static func inlineMarkdownItalicIgnoresSnakeCase() throws {
+    let snake = paragraphDoc([text("my snake_case", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    if LinearCommands.inlineMarkdownRule(typed: "_", linear: snake, selection: caretAt(13), storedMarks: []) != nil {
+      throw TestError.failed("snake_case became italic")
+    }
+    var linear = paragraphDoc([text("*it", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    guard let plan = LinearCommands.inlineMarkdownRule(typed: "*", linear: linear, selection: caretAt(3), storedMarks: []) else {
+      throw TestError.failed("italic rule miss")
+    }
+    try LinearModel.apply(plan.operations, to: &linear)
+    guard linear.blocks[0].plainText == "it",
+          LinearModel.rangeHasMark("italic", from: caretAt(0), to: caretAt(2), in: linear) else {
+      throw TestError.failed("italic apply")
+    }
+  }
+
+  static func inlineMarkdownCodeAndLink() throws {
+    var code = paragraphDoc([text("run `ls", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    guard let codePlan = LinearCommands.inlineMarkdownRule(typed: "`", linear: code, selection: caretAt(7), storedMarks: []) else {
+      throw TestError.failed("code rule miss")
+    }
+    try LinearModel.apply(codePlan.operations, to: &code)
+    guard code.blocks[0].plainText == "run ls",
+          LinearModel.rangeHasMark("inlineCode", from: caretAt(4), to: caretAt(6), in: code) else {
+      throw TestError.failed("code apply")
+    }
+    var link = paragraphDoc([text("see [site](https://a.b", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    guard let linkPlan = LinearCommands.inlineMarkdownRule(typed: ")", linear: link, selection: caretAt(22), storedMarks: []) else {
+      throw TestError.failed("link rule miss")
+    }
+    try LinearModel.apply(linkPlan.operations, to: &link)
+    let linked = link.blocks[0].runs.first { $0.marks.contains(where: \.isLink) }
+    guard link.blocks[0].plainText == "see site",
+          linked?.text == "site",
+          linked?.marks.first(where: \.isLink)?.href == "https://a.b" else {
+      throw TestError.failed("link apply")
+    }
+    let unsafe = paragraphDoc([text("[x](javascript:alert", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    if LinearCommands.inlineMarkdownRule(typed: ")", linear: unsafe, selection: caretAt(20), storedMarks: []) != nil {
+      throw TestError.failed("javascript link accepted")
+    }
+  }
+
+  static func dividerInputRule() throws {
+    var linear = paragraphDoc([text("---", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    guard let plan = LinearCommands.inputRule(terminator: "\n", linear: linear, selection: caretAt(3), storedMarks: []) else {
+      throw TestError.failed("divider rule miss")
+    }
+    try LinearModel.apply(plan.operations, to: &linear)
+    let types = LinearModel.linearToDocument(linear).content.map(\.type)
+    guard types == ["horizontalRule", "paragraph"], plan.selectionAfter?.nodeId == linear.blocks[1].id else {
+      throw TestError.failed("divider rule result \(types)")
+    }
+  }
+
+  static func imageWidthCommand() throws {
+    var linear = LinearModel.documentToLinear(
+      SchemaNode.parseDictionary(
+        [
+          "type": "doc",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            [
+              "type": "image",
+              "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa",
+              "attrs": ["attachmentId": "aiaaaaaaaaaaaaaaaaaaaaaaaa", "widthBasisPoints": 10000, "alt": ""],
+              "content": [Any]()
+            ],
+            ["type": "paragraph", "id": "amaaaaaaaaaaaaaaaaaaaaaaaa", "content": [Any]()]
+          ]
+        ]
+      )
+    )
+    for (requested, expected) in [(5000, 5000), (10, LinearCommands.minimumImageWidthBasisPoints)] {
+      let plan = LinearCommands.commandPlan(
+        name: "setImageWidth",
+        value: .object(["nodeId": .string("aeaaaaaaaaaaaaaaaaaaaaaaaa"), "widthBasisPoints": .int(requested)]),
+        linear: linear,
+        selection: caretAt(0, "amaaaaaaaaaaaaaaaaaaaaaaaa"),
+        selectionEnd: nil,
+        storedMarks: []
+      )
+      try LinearModel.apply(plan.operations, to: &linear)
+      let width = LinearModel.linearToDocument(linear).content[0].attrs["widthBasisPoints"]?.intValue()
+      if width != expected {
+        throw TestError.failed("image width \(String(describing: width)) != \(expected)")
+      }
+    }
+  }
+
+  static func insertBlocksSplitsParagraph() throws {
+    var linear = paragraphDoc([text("hello world", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    let nodes = [
+      SchemaNode(type: "heading", id: "baaaaaaaaaaaaaaaaaaaaaaaaa", attrs: ["level": .int(2)], content: [LinearModel.textNode("Title", marks: [])], text: nil, marks: []),
+      SchemaNode(type: "paragraph", id: "beaaaaaaaaaaaaaaaaaaaaaaaa", attrs: [:], content: [LinearModel.textNode("body", marks: [LinearMark(type: "bold")])], text: nil, marks: [])
+    ]
+    let plan = LinearCommands.insertBlocks(nodes, linear: linear, selection: caretAt(6), selectionEnd: nil, storedMarks: [])
+    try LinearModel.apply(plan.operations, to: &linear)
+    let texts = linear.blocks.map(\.plainText)
+    guard texts == ["hello ", "Title", "body", "world"], linear.blocks[1].kind == .heading else {
+      throw TestError.failed("paste split \(texts)")
+    }
+    guard plan.selectionAfter?.nodeId == "beaaaaaaaaaaaaaaaaaaaaaaaa", plan.selectionAfter?.offsetUtf16 == 4 else {
+      throw TestError.failed("paste caret")
+    }
+    var inline = paragraphDoc([text("world", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa")])
+    let one = [SchemaNode(type: "paragraph", id: "biaaaaaaaaaaaaaaaaaaaaaaaa", attrs: [:], content: [LinearModel.textNode("hi ", marks: [LinearMark(type: "italic")])], text: nil, marks: [])]
+    let inlinePlan = LinearCommands.insertBlocks(one, linear: inline, selection: caretAt(0), selectionEnd: nil, storedMarks: [])
+    try LinearModel.apply(inlinePlan.operations, to: &inline)
+    guard inline.blocks.count == 1, inline.blocks[0].plainText == "hi world",
+          LinearModel.rangeHasMark("italic", from: caretAt(0), to: caretAt(3), in: inline) else {
+      throw TestError.failed("inline paste")
+    }
+  }
+
+  static func preciseInverseRestoresMarksAndBlocks() throws {
+    let original = LinearModel.documentToLinear(
+      SchemaNode.parseDictionary(
+        [
+          "type": "doc",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [
+            ["type": "paragraph", "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa", "content": [text("ab", id: "aiaaaaaaaaaaaaaaaaaaaaaaaa"), text("cd", id: "amaaaaaaaaaaaaaaaaaaaaaaaa", marks: ["bold"])]],
+            ["type": "horizontalRule", "id": "aqaaaaaaaaaaaaaaaaaaaaaaaa"],
+            ["type": "paragraph", "id": "auaaaaaaaaaaaaaaaaaaaaaaaa", "content": [text("z", id: "ayaaaaaaaaaaaaaaaaaaaaaaaa")]]
+          ]
+        ]
+      )
+    )
+    let rule = SchemaNode(type: "horizontalRule", id: "aqaaaaaaaaaaaaaaaaaaaaaaaa", attrs: [:], content: [], text: nil, marks: [])
+    let cases: [[SchemaOperation]] = [
+      [.addMark(from: caretAt(1), to: caretAt(3), mark: SchemaMark(type: "italic"))],
+      [.removeMark(from: caretAt(0), to: caretAt(4), markType: "bold")],
+      [.deleteRange(from: caretAt(1), to: caretAt(3), deletedSlice: [])],
+      [.insertText(position: caretAt(2), text: "XY", storedMarks: [SchemaMark(type: "underline")])],
+      [.deleteNode(nodeId: rule.id, deletedNode: rule)]
+    ]
+    for (index, operations) in cases.enumerated() {
+      guard let inverse = LinearModel.invert(operations, before: original) else {
+        throw TestError.failed("inverse \(index) missing")
+      }
+      var state = original
+      try LinearModel.apply(operations, to: &state)
+      try LinearModel.apply(inverse, to: &state)
+      if signature(state) != signature(original) {
+        throw TestError.failed("inverse \(index) restored \(signature(state))")
+      }
+    }
+    let crossBlock: [SchemaOperation] = [.deleteRange(from: caretAt(3), to: caretAt(0, "auaaaaaaaaaaaaaaaaaaaaaaaa"), deletedSlice: [])]
+    if LinearModel.invert(crossBlock, before: original) != nil {
+      throw TestError.failed("cross-block delete should fall back to a snapshot")
+    }
+  }
+
+  private static func paragraphDoc(_ runs: [[String: Any]]) -> LinearDocument {
+    LinearModel.documentToLinear(
+      SchemaNode.parseDictionary(
+        [
+          "type": "doc",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content": [["type": "paragraph", "id": "aeaaaaaaaaaaaaaaaaaaaaaaaa", "content": runs]]
+        ]
+      )
+    )
+  }
+
+  private static func caretAt(_ offset: Int, _ nodeId: String = "aeaaaaaaaaaaaaaaaaaaaaaaaa") -> SchemaSelection {
+    SchemaSelection(nodeId: nodeId, offsetUtf16: offset, affinity: "after", revision: 0)
+  }
+
+  private static func text(_ value: String, id: String, marks: [String] = []) -> [String: Any] {
+    ["type": "text", "id": id, "text": value, "marks": marks.map { ["type": $0] }]
+  }
+
+  /// Block kinds plus text grouped by mark set, ignoring run ids that undo regenerates.
+  private static func signature(_ linear: LinearDocument) -> [String] {
+    linear.blocks.map { block in
+      var parts: [(text: String, marks: String)] = []
+      for run in block.runs where !run.text.isEmpty {
+        let key = run.marks.map(\.type).sorted().joined(separator: ",")
+        if let last = parts.last, last.marks == key {
+          parts[parts.count - 1].text += run.text
+        } else {
+          parts.append((run.text, key))
+        }
+      }
+      return "\(block.kind.rawValue):" + parts.map { "\($0.text)[\($0.marks)]" }.joined()
     }
   }
 

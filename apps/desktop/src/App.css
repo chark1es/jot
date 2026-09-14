@@ -3,9 +3,9 @@
     var(--jot-type-ui-font-family-apple), var(--jot-type-ui-font-family-windows), system-ui,
     sans-serif;
   font-size: 16px;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--jot-color-ink);
-  background: var(--jot-color-canvas);
+  background: var(--jot-color-surface);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -97,10 +97,18 @@ textarea:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 19rem minmax(0, 1fr);
+  grid-template-columns: 16rem minmax(0, 1fr);
   min-height: 100dvh;
   height: 100dvh;
-  background: var(--jot-color-canvas);
+  background: var(--jot-color-surface);
+}
+
+.app-shell:not(.sidebar-open) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell:not(.sidebar-open) .sidebar {
+  display: none;
 }
 
 .sidebar {
@@ -109,10 +117,10 @@ textarea:focus-visible {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  padding: var(--jot-spacing-scale-space24) var(--jot-spacing-scale-space16)
-    var(--jot-spacing-scale-space16);
+  padding: var(--jot-spacing-scale-space16);
   border-right: 1px solid var(--jot-color-hairline);
   background: var(--jot-color-surface);
+  font-size: var(--jot-type-ui-size-desktop);
 }
 
 .sidebar-heading,
@@ -127,19 +135,19 @@ textarea:focus-visible {
 
 .sidebar-heading {
   justify-content: space-between;
-  min-height: 2.5rem;
-  padding: 0 var(--jot-spacing-scale-space4) var(--jot-spacing-scale-space16);
+  min-height: 2rem;
+  padding: 0 var(--jot-spacing-scale-space4) var(--jot-spacing-scale-space12);
 }
 
 .wordmark {
-  font-size: 1.35rem;
-  font-weight: 650;
-  letter-spacing: -0.035em;
+  font-size: var(--jot-type-ui-size-title);
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 .icon {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.15rem;
+  height: 1.15rem;
   flex: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -156,8 +164,7 @@ textarea:focus-visible {
   cursor: pointer;
   transition:
     color var(--jot-motion-duration-fast) var(--jot-motion-easing-standard),
-    background-color var(--jot-motion-duration-fast) var(--jot-motion-easing-standard),
-    transform var(--jot-motion-duration-fast) var(--jot-motion-easing-standard);
+    background-color var(--jot-motion-duration-fast) var(--jot-motion-easing-standard);
 }
 
 .icon-button:active,
@@ -165,13 +172,13 @@ textarea:focus-visible {
 .note-row:active,
 .text-button:active,
 .primary-button:active {
-  transform: translateY(1px);
+  opacity: 0.7;
 }
 
 .icon-button {
   display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   place-items: center;
   padding: 0;
   border-radius: var(--jot-radius-control);
@@ -194,27 +201,32 @@ textarea:focus-visible {
 
 .primary-nav {
   display: grid;
-  gap: var(--jot-spacing-scale-space4);
-  margin-bottom: var(--jot-spacing-scale-space16);
+  gap: var(--jot-spacing-scale-space2);
+  margin-bottom: var(--jot-spacing-scale-space12);
 }
 
 .nav-button {
   display: flex;
-  min-height: 2.5rem;
+  min-height: 2rem;
   align-items: center;
-  gap: var(--jot-spacing-scale-space12);
-  padding: var(--jot-spacing-scale-space8) var(--jot-spacing-scale-space12);
+  gap: var(--jot-spacing-scale-space8);
+  padding: var(--jot-spacing-scale-space8) var(--jot-spacing-scale-space8);
   border-radius: var(--jot-radius-control);
   color: var(--jot-color-ink-muted);
   background: transparent;
   text-align: left;
-  font-weight: 550;
+  font-weight: 500;
 }
 
-.nav-button:hover,
+.nav-button:hover {
+  color: var(--jot-color-ink);
+  background: color-mix(in srgb, var(--jot-color-canvas) 70%, transparent);
+}
+
 .nav-button.is-active {
   color: var(--jot-color-ink);
-  background: color-mix(in srgb, var(--jot-color-canvas) 64%, transparent);
+  background: var(--jot-color-canvas);
+  font-weight: 600;
 }
 
 .nav-button.is-active .icon {
@@ -223,14 +235,14 @@ textarea:focus-visible {
 
 .search-field {
   display: flex;
-  min-height: 2.5rem;
+  min-height: 2rem;
   align-items: center;
   gap: var(--jot-spacing-scale-space8);
-  padding: 0 var(--jot-spacing-scale-space12);
-  border: 1px solid transparent;
+  padding: 0 var(--jot-spacing-scale-space8);
+  border: 1px solid var(--jot-color-hairline);
   border-radius: var(--jot-radius-control);
   color: var(--jot-color-ink-muted);
-  background: color-mix(in srgb, var(--jot-color-canvas) 74%, transparent);
+  background: var(--jot-color-canvas);
 }
 
 .search-field:focus-within {
@@ -255,15 +267,15 @@ textarea:focus-visible {
 
 kbd {
   font-family: inherit;
-  font-size: 0.6875rem;
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   color: var(--jot-color-ink-muted);
 }
 
 .note-list-heading {
   justify-content: space-between;
-  padding: var(--jot-spacing-scale-space24) var(--jot-spacing-scale-space8)
+  padding: var(--jot-spacing-scale-space16) var(--jot-spacing-scale-space8)
     var(--jot-spacing-scale-space8);
-  font-size: 0.75rem;
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   font-weight: 600;
   color: var(--jot-color-ink-muted);
 }
@@ -280,13 +292,16 @@ kbd {
 .note-row {
   display: block;
   width: 100%;
-  padding: var(--jot-spacing-scale-space12);
-  border-radius: var(--jot-radius-control);
+  padding: var(--jot-spacing-scale-space8);
+  border-radius: var(--jot-radius-compact);
   background: transparent;
   text-align: left;
 }
 
-.note-row:hover,
+.note-row:hover {
+  background: color-mix(in srgb, var(--jot-color-canvas) 80%, transparent);
+}
+
 .note-row.is-active {
   background: var(--jot-color-canvas);
 }
@@ -296,10 +311,9 @@ kbd {
 }
 
 .no-results {
-  padding: var(--jot-spacing-scale-space24) var(--jot-spacing-scale-space12);
-  font-size: 0.8125rem;
+  padding: var(--jot-spacing-scale-space16) var(--jot-spacing-scale-space8);
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   color: var(--jot-color-ink-muted);
-  text-align: center;
 }
 
 .note-row-topline {
@@ -316,28 +330,28 @@ kbd {
 
 .note-row strong {
   min-width: 0;
-  font-size: 0.875rem;
+  font-size: var(--jot-type-ui-size-desktop);
   font-weight: 600;
 }
 
 .note-row time {
   flex: none;
-  font-size: 0.6875rem;
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   font-variant-numeric: tabular-nums;
   color: var(--jot-color-ink-muted);
 }
 
 .note-preview {
   display: block;
-  margin-top: var(--jot-spacing-scale-space4);
-  font-size: 0.8125rem;
+  margin-top: var(--jot-spacing-scale-space2);
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   color: var(--jot-color-ink-muted);
 }
 
 .local-status {
   gap: var(--jot-spacing-scale-space8);
-  padding: var(--jot-spacing-scale-space16) var(--jot-spacing-scale-space8) 0;
-  font-size: 0.75rem;
+  padding: var(--jot-spacing-scale-space12) var(--jot-spacing-scale-space8) 0;
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   color: var(--jot-color-ink-muted);
 }
 
@@ -352,15 +366,17 @@ kbd {
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: 3.5rem minmax(0, 1fr);
+  grid-template-rows: 2.75rem minmax(0, 1fr);
+  background: var(--jot-color-surface);
 }
 
 .workspace-bar {
   min-width: 0;
   justify-content: space-between;
   gap: var(--jot-spacing-scale-space16);
-  padding: var(--jot-spacing-scale-space8) var(--jot-spacing-scale-space24);
+  padding: var(--jot-spacing-scale-space8) var(--jot-spacing-scale-space16);
   border-bottom: 1px solid var(--jot-color-hairline);
+  font-size: var(--jot-type-ui-size-desktop);
   -webkit-app-region: drag;
 }
 
@@ -369,12 +385,12 @@ kbd {
 }
 
 .menu-button {
-  display: none;
+  display: grid;
 }
 
 .save-status {
   margin-right: auto;
-  font-size: 0.75rem;
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   color: var(--jot-color-ink-muted);
 }
 
@@ -385,18 +401,18 @@ kbd {
 }
 
 .text-button {
-  min-height: 2.25rem;
-  padding: 0 var(--jot-spacing-scale-space12);
+  min-height: 2rem;
+  padding: 0 var(--jot-spacing-scale-space8);
   border-radius: var(--jot-radius-control);
-  font-size: 0.8125rem;
-  font-weight: 550;
+  font-size: var(--jot-type-ui-size-desktop);
+  font-weight: 500;
   color: var(--jot-color-ink-muted);
   background: transparent;
 }
 
 .text-button:hover {
   color: var(--jot-color-ink);
-  background: var(--jot-color-surface);
+  background: var(--jot-color-canvas);
 }
 
 .text-button.danger:hover {
@@ -406,48 +422,48 @@ kbd {
 .empty-state {
   align-self: center;
   justify-self: center;
-  width: min(28rem, calc(100% - 3rem));
-  margin-top: -4vh;
+  width: min(24rem, calc(100% - 3rem));
   text-align: center;
 }
 
 .empty-mark {
   display: grid;
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
-  margin: 0 auto var(--jot-spacing-scale-space24);
-  border-radius: var(--jot-radius-sheet);
+  margin: 0 auto var(--jot-spacing-scale-space16);
+  border-radius: var(--jot-radius-control);
   color: var(--jot-color-accent);
   background: var(--jot-color-accent-muted);
 }
 
 .empty-mark .icon {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .empty-state h1 {
   margin: 0;
-  font-size: clamp(1.65rem, 4vw, 2.35rem);
-  line-height: 1.08;
-  letter-spacing: -0.035em;
+  font-size: var(--jot-type-ui-size-large-title);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
   text-wrap: balance;
 }
 
 .empty-state p {
-  max-width: 38ch;
-  margin: var(--jot-spacing-scale-space16) auto 0;
+  max-width: 36ch;
+  margin: var(--jot-spacing-scale-space12) auto 0;
   color: var(--jot-color-ink-muted);
   text-wrap: pretty;
 }
 
 .primary-button {
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 2rem;
   align-items: center;
   gap: var(--jot-spacing-scale-space8);
-  margin-top: var(--jot-spacing-scale-space24);
+  margin-top: var(--jot-spacing-scale-space16);
   padding: 0 var(--jot-spacing-scale-space16);
   border-radius: var(--jot-radius-control);
   color: var(--jot-color-canvas);
@@ -467,7 +483,10 @@ kbd {
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
   justify-self: center;
-  padding: clamp(2rem, 7vh, 5rem) clamp(1.5rem, 7vw, 4rem) var(--jot-spacing-scale-space16);
+  margin: var(--jot-spacing-scale-space16) var(--jot-spacing-scale-space16)
+    var(--jot-spacing-scale-space16);
+  padding: clamp(2rem, 6vh, 4rem) clamp(1.5rem, 6vw, 4rem) var(--jot-spacing-scale-space16);
+  background: var(--jot-color-canvas);
 }
 
 .title-input,
@@ -486,10 +505,13 @@ kbd {
 
 .title-input {
   padding: 0 0 var(--jot-spacing-scale-space24);
-  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-family:
+    var(--jot-type-editor-font-family-apple), var(--jot-type-editor-font-family-windows), Georgia,
+    serif;
+  font-size: clamp(1.75rem, 3.5vw, 2.5rem);
   font-weight: 650;
-  line-height: 1.08;
-  letter-spacing: -0.04em;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
 }
 
 .title-input:focus-visible,
@@ -512,7 +534,7 @@ kbd {
   justify-content: space-between;
   gap: var(--jot-spacing-scale-space16);
   padding-top: var(--jot-spacing-scale-space16);
-  font-size: 0.75rem;
+  font-size: var(--jot-type-ui-size-desktop-secondary);
   font-variant-numeric: tabular-nums;
   color: var(--jot-color-ink-muted);
 }
@@ -522,11 +544,15 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .app-shell {
+  .app-shell,
+  .app-shell:not(.sidebar-open) {
     display: block;
+    grid-template-columns: none;
   }
 
+  .app-shell:not(.sidebar-open) .sidebar,
   .sidebar {
+    display: flex;
     position: fixed;
     inset: 0 auto 0 0;
     width: min(20rem, calc(100vw - 3rem));
@@ -565,16 +591,13 @@ kbd {
     padding-left: var(--jot-spacing-scale-space12);
   }
 
-  .menu-button {
-    display: grid;
-  }
-
   .editor {
-    padding-top: clamp(2rem, 7vh, 4rem);
+    margin: 0;
+    padding-top: clamp(1.5rem, 6vh, 3rem);
   }
 
   .title-input {
-    font-size: clamp(1.85rem, 9vw, 2.5rem);
+    font-size: clamp(1.7rem, 8vw, 2.25rem);
   }
 }
 

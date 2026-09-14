@@ -1,5 +1,6 @@
 export { archiveExportFiles } from './archive.js';
 export { ExportError, exportNotes, exportVault, exportVaultToFiles } from './export-vault.js';
+export { looksLikeMarkdown, markdownToBlocks, parseInlineMarkdown } from './markdown-import.js';
 export type {
   ExportAttachment,
   ExportFile,

@@ -11,6 +11,9 @@ public class JotEditorModule: Module {
         "onSelectionChanged",
         "onCompositionChanged",
         "onContentSizeChanged",
+        "onFocusChanged",
+        "onImagePressed",
+        "onPasteRequested",
         "onRecoverableError"
       )
 
@@ -28,6 +31,18 @@ public class JotEditorModule: Module {
 
       Prop("canonicalDocument") { (view: JotEditorView, value: [String: Any]?) in
         view.setCanonicalDocument(value)
+      }
+
+      Prop("attachmentsDirectory") { (view: JotEditorView, value: String?) in
+        view.setAttachmentsDirectory(value)
+      }
+
+      Prop("placeholder") { (view: JotEditorView, value: String?) in
+        view.setPlaceholder(value)
+      }
+
+      Prop("accentColor") { (view: JotEditorView, value: String?) in
+        view.setAccentColor(value)
       }
 
       AsyncFunction("loadDocument") { (view: JotEditorView, documentId: String, canonicalDocument: [String: Any], schemaVersion: Int, revision: Int) in
@@ -74,6 +89,14 @@ public class JotEditorModule: Module {
 
       AsyncFunction("redo") { (view: JotEditorView) in
         try view.redo()
+      }
+
+      AsyncFunction("setAppliedTransactionIds") { (view: JotEditorView, ids: [String]) in
+        view.setAppliedTransactionIds(ids)
+      }
+
+      AsyncFunction("seedHistory") { (view: JotEditorView, undo: [[String: Any]], redo: [[String: Any]]) in
+        view.seedHistory(undo: undo, redo: redo)
       }
 
       AsyncFunction("listUnappliedIntake") { (view: JotEditorView) -> [[String: Any]] in

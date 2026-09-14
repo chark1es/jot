@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { tokens } from '@jot/tokens/generated';
 import type { ListMode, NoteSort, SemanticPalette } from '@jot/ui-mobile';
-import { editorBodySize, touchMin, uiFontFamily } from '../theme';
+import { pressedStyle, touchMin, typeSize, uiFontFamily } from '../theme';
+import { GlassSurface } from './GlassSurface';
 
 const MODES: readonly { readonly id: ListMode; readonly label: string }[] = [
   { id: 'notes', label: 'Notes' },
@@ -9,27 +10,26 @@ const MODES: readonly { readonly id: ListMode; readonly label: string }[] = [
   { id: 'trash', label: 'Trash' },
 ];
 
-const SORTS: readonly NoteSort[] = ['modified', 'created', 'title', 'manual'];
+export const SORTS: readonly NoteSort[] = ['modified', 'created', 'title', 'manual'];
 
-const SORT_LABEL: Record<NoteSort, string> = {
-  modified: 'Modified',
-  created: 'Created',
+export const SORT_LABEL: Record<NoteSort, string> = {
+  modified: 'Date edited',
+  created: 'Date created',
   title: 'Title',
-  manual: 'Manual',
+  manual: 'Custom order',
 };
 
 type Props = {
   readonly palette: SemanticPalette;
   readonly mode: ListMode;
-  readonly sort: NoteSort;
   readonly onMode: (mode: ListMode) => void;
-  readonly onCycleSort: () => void;
 };
 
-export function ListControls({ palette, mode, sort, onMode, onCycleSort }: Props) {
+/** A segmented control: one choice among three views of the same notes. */
+export function ListControls({ palette, mode, onMode }: Props) {
   return (
-    <View style={[styles.wrap, { borderBottomColor: palette.hairline }]}>
-      <View style={styles.modes}>
+    <View style={styles.wrap}>
+      <GlassSurface palette={palette} style={[styles.control, { borderColor: palette.hairline }]}>
         {MODES.map((item) => {
           const selected = item.id === mode;
           return (
@@ -38,19 +38,19 @@ export function ListControls({ palette, mode, sort, onMode, onCycleSort }: Props
               onPress={() => {
                 onMode(item.id);
               }}
-              accessibilityRole="button"
+              accessibilityRole="tab"
               accessibilityState={{ selected }}
-              accessibilityLabel={item.label}
-              style={styles.mode}
+              style={({ pressed }) => [
+                styles.segment,
+                selected ? { backgroundColor: palette.accentMuted } : null,
+                pressedStyle(pressed),
+              ]}
             >
               <Text
                 style={[
-                  styles.modeLabel,
-                  {
-                    color: selected ? palette.ink : palette.inkMuted,
-                    fontWeight: selected ? '600' : '400',
-                    fontFamily: uiFontFamily(),
-                  },
+                  styles.label,
+                  selected ? styles.labelSelected : null,
+                  { color: selected ? palette.ink : palette.inkMuted, fontFamily: uiFontFamily() },
                 ]}
               >
                 {item.label}
@@ -58,52 +58,37 @@ export function ListControls({ palette, mode, sort, onMode, onCycleSort }: Props
             </Pressable>
           );
         })}
-      </View>
-      <Pressable
-        onPress={onCycleSort}
-        accessibilityRole="button"
-        accessibilityLabel={`Sort by ${SORT_LABEL[sort]}`}
-        style={styles.sort}
-      >
-        <Text style={[styles.sortLabel, { color: palette.inkMuted, fontFamily: uiFontFamily() }]}>
-          {SORT_LABEL[sort]}
-        </Text>
-      </Pressable>
+      </GlassSurface>
     </View>
   );
-}
-
-export function nextSort(sort: NoteSort): NoteSort {
-  const index = SORTS.indexOf(sort);
-  const next = SORTS[(index + 1) % SORTS.length];
-  return next ?? 'modified';
 }
 
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: tokens.spacing.scale.space16,
+    paddingTop: tokens.spacing.scale.space4,
+    paddingBottom: tokens.spacing.scale.space8,
+  },
+  control: {
+    width: '100%',
     minHeight: touchMin,
+    borderRadius: tokens.radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: tokens.spacing.scale.space4,
     flexDirection: 'row',
+  },
+  segment: {
+    flex: 1,
+    minHeight: touchMin,
+    borderRadius: tokens.radius.pill,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  modes: {
-    flexDirection: 'row',
-    gap: tokens.spacing.scale.space16,
-  },
-  mode: {
-    minHeight: touchMin,
     justifyContent: 'center',
   },
-  modeLabel: {
-    fontSize: editorBodySize,
+  label: {
+    fontSize: typeSize.subhead,
+    fontWeight: '500',
   },
-  sort: {
-    minHeight: touchMin,
-    justifyContent: 'center',
-  },
-  sortLabel: {
-    fontSize: editorBodySize,
+  labelSelected: {
+    fontWeight: '700',
   },
 });

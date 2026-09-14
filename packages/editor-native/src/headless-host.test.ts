@@ -363,7 +363,7 @@ describe('HeadlessEditorHost', () => {
     expect(afterImage.content[2]?.type).toBe('horizontalRule');
     const committed = events.filter((event) => event.type === 'committedTransaction');
     expect(committed.length).toBeGreaterThan(0);
-    expect(committed.every((event) => event.inverses.length > 0)).toBe(true);
+    expect(committed.every((event) => (event.inverses?.length ?? 0) > 0)).toBe(true);
     expect(await intake.listUnapplied()).toHaveLength(0);
     await host.undo();
     expect((await host.getDocumentSnapshot()).canonicalDocument.content[1]?.type).toBe(

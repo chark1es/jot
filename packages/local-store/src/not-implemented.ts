@@ -112,6 +112,21 @@ export class NotImplementedLocalStore implements LocalStore {
   listUndoRedo(): Promise<UndoRedoList> {
     return reject('listUndoRedo');
   }
+  listHistory(): ReturnType<LocalStore['listHistory']> {
+    return reject('listHistory');
+  }
+  listAppliedTransactionIds(): ReturnType<LocalStore['listAppliedTransactionIds']> {
+    return reject('listAppliedTransactionIds');
+  }
+  reorderNote(): Promise<void> {
+    return reject('reorderNote');
+  }
+  deleteNotePermanently(): Promise<void> {
+    return reject('deleteNotePermanently');
+  }
+  purgeExpiredTrash(): Promise<readonly NoteId[]> {
+    return reject('purgeExpiredTrash');
+  }
   saveVersion(): Promise<VersionSnapshot> {
     return reject('saveVersion');
   }
