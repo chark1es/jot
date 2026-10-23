@@ -20,7 +20,7 @@
   "dependencies": {
     "@jot/core": "workspace:*",
     "@jot/schema": "workspace:*",
-    "fflate": "0.8.2"
+    "fflate": "0.8.3"
   },
   "devDependencies": {
     "@jot/tsconfig": "workspace:*"

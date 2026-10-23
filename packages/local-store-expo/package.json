@@ -20,7 +20,7 @@
   "dependencies": {
     "@jot/local-store": "workspace:*",
     "@jot/schema": "workspace:*",
-    "expo-sqlite": "57.0.2"
+    "expo-sqlite": "57.0.4"
   },
   "devDependencies": {
     "@jot/tsconfig": "workspace:*"
