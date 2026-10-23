@@ -15,17 +15,17 @@
   },
   "dependencies": {
     "@jot/tokens": "workspace:*",
-    "@tauri-apps/api": "2.11.1",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "@tauri-apps/api": "2.12.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.4",
-    "@types/node": "24.10.0",
-    "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.2",
-    "@vitejs/plugin-react": "6.0.2",
+    "@tauri-apps/cli": "2.12.4",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
     "typescript": "5.9.3",
-    "vite": "8.0.16"
+    "vite": "8.3.5"
   }
 }

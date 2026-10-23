@@ -23,7 +23,7 @@
     "@jot/local-store": "workspace:*",
     "@jot/schema": "workspace:*",
     "@jot/storage": "workspace:*",
-    "yjs": "13.6.32"
+    "yjs": "13.6.33"
   },
   "devDependencies": {
     "@jot/tsconfig": "workspace:*"
